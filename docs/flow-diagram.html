@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OmniVault — Project Audit Flow</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    min-height: 100vh;
+    padding: 40px 20px 60px;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: .5px;
+    color: #f0f6fc;
+    margin-bottom: 6px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: #8b949e;
+    margin-bottom: 36px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  /* ── Lane headers ── */
+  .lanes {
+    display: grid;
+    grid-template-columns: 220px 1fr 220px;
+    gap: 0;
+    max-width: 980px;
+    margin: 0 auto 0;
+  }
+  .lane-header {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    padding: 8px 12px;
+    border-radius: 6px 6px 0 0;
+  }
+  .lane-chain  { background: #161b22; color: #58a6ff; border: 1px solid #1f2d3d; }
+  .lane-center { background: transparent; color: #8b949e; }
+  .lane-ai     { background: #161b22; color: #3fb950; border: 1px solid #1a2d1a; }
+
+  /* ── Main SVG container ── */
+  .diagram-wrap {
+    max-width: 980px;
+    margin: 0 auto;
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  /* ── Legend ── */
+  .legend {
+    max-width: 980px;
+    margin: 20px auto 0;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #8b949e;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .legend-dot {
+    width: 12px; height: 12px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<h1>OmniVault — Project Audit &amp; Fund Flow</h1>
+<p class="subtitle">From Project Application → Multi-Agent AI Analysis → On-Chain Fulfillment</p>
+
+<div class="lanes">
+  <div class="lane-header lane-chain">⛓ Blockchain</div>
+  <div class="lane-header lane-center"></div>
+  <div class="lane-header lane-ai">🤖 AI Service</div>
+</div>
+
+<div class="diagram-wrap">
+<svg viewBox="0 0 980 1480" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Arrow markers -->
+    <marker id="arr-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#58a6ff"/>
+    </marker>
+    <marker id="arr-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#3fb950"/>
+    </marker>
+    <marker id="arr-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#e3b341"/>
+    </marker>
+    <marker id="arr-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#bc8cff"/>
+    </marker>
+    <marker id="arr-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#f85149"/>
+    </marker>
+    <marker id="arr-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#8b949e"/>
+    </marker>
+
+    <!-- Lane backgrounds -->
+    <linearGradient id="bg-chain" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#0d1117"/>
+    </linearGradient>
+
+    <!-- Phase label gradients -->
+    <linearGradient id="phase1-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1f2d3d" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#1f2d3d" stop-opacity="0.4"/>
+    </linearGradient>
+    <linearGradient id="phase2-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1a2d1a" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#1a2d1a" stop-opacity="0.4"/>
+    </linearGradient>
+    <linearGradient id="phase3-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e1a2e" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#1e1a2e" stop-opacity="0.4"/>
+    </linearGradient>
+    <linearGradient id="phase4-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2d1f0d" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#2d1f0d" stop-opacity="0.4"/>
+    </linearGradient>
+    <linearGradient id="phase5-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0d2d1a" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#0d2d1a" stop-opacity="0.4"/>
+    </linearGradient>
+
+    <filter id="glow-blue">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- ══ Lane dividers ══ -->
+  <rect x="0" y="0" width="280" height="1480" fill="#0d1117" opacity="1"/>
+  <rect x="700" y="0" width="280" height="1480" fill="#0d1117" opacity="1"/>
+  <!-- subtle lane borders -->
+  <line x1="280" y1="0" x2="280" y2="1480" stroke="#21262d" stroke-width="1" stroke-dasharray="4,4"/>
+  <line x1="700" y1="0" x2="700" y2="1480" stroke="#21262d" stroke-width="1" stroke-dasharray="4,4"/>
+
+  <!-- ════════════════════════════════════════════
+       PHASE 1 — On-Chain Submission
+  ════════════════════════════════════════════ -->
+  <!-- Phase band -->
+  <rect x="0" y="10" width="980" height="236" fill="url(#phase1-grad)" rx="0"/>
+  <text x="490" y="32" text-anchor="middle" font-family="'SF Mono',monospace" font-size="11" font-weight="700" fill="#58a6ff" letter-spacing="2">PHASE 1 — ON-CHAIN SUBMISSION</text>
+
+  <!-- Applicant box -->
+  <rect x="30" y="44" width="220" height="52" rx="8" fill="#161b22" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="140" y="66" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="13" font-weight="700" fill="#f0f6fc">👤 Applicant</text>
+  <text x="140" y="84" text-anchor="middle" font-family="'SF Mono',monospace" font-size="10" fill="#8b949e">Frontend / EOA Wallet</text>
+
+  <!-- Arrow: Applicant → submitProject -->
+  <line x1="250" y1="70" x2="355" y2="70" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arr-blue)"/>
+  <text x="302" y="63" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#58a6ff">submitProject()</text>
+  <text x="302" y="78" text-anchor="middle" font-family="'SF Mono',monospace" font-size="8.5" fill="#6e7681">commitHash, contractAddr,</text>
+  <text x="302" y="88" text-anchor="middle" font-family="'SF Mono',monospace" font-size="8.5" fill="#6e7681">bizApi (deckUrl)</text>
+
+  <!-- InvestmentManager box -->
+  <rect x="356" y="44" width="268" height="52" rx="8" fill="#161b22" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="490" y="66" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="13" font-weight="700" fill="#f0f6fc">📜 InvestmentManager.sol</text>
+  <text x="490" y="84" text-anchor="middle" font-family="'SF Mono',monospace" font-size="10" fill="#8b949e">Arbitrum / Local Hardhat</text>
+
+  <!-- Internal flow: submitProject steps -->
+  <!-- Step boxes -->
+  <rect x="60" y="118" width="182" height="38" rx="6" fill="#1f2d3d" stroke="#31444d" stroke-width="1"/>
+  <text x="151" y="133" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#79c0ff">status = Pending</text>
+  <text x="151" y="148" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#6e7681">validate commitHash ≠ 0</text>
+
+  <rect x="270" y="118" width="182" height="38" rx="6" fill="#1f2d3d" stroke="#31444d" stroke-width="1"/>
+  <text x="361" y="133" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#79c0ff">_requestAudit()</text>
+  <text x="361" y="148" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#6e7681">status = Auditing</text>
+
+  <!-- Event emit box -->
+  <rect x="480" y="118" width="220" height="38" rx="6" fill="#1c2a1c" stroke="#2d5a2d" stroke-width="1"/>
+  <text x="590" y="133" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#3fb950">emit ProjectSubmitted(</text>
+  <text x="590" y="148" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#6e7681">projectId, applicant, commitHash)</text>
+
+  <!-- Arrows between steps -->
+  <line x1="242" y1="137" x2="268" y2="137" stroke="#8b949e" stroke-width="1" marker-end="url(#arr-gray)"/>
+  <line x1="452" y1="137" x2="478" y2="137" stroke="#8b949e" stroke-width="1" marker-end="url(#arr-gray)"/>
+
+  <!-- Event travels to right side -->
+  <line x1="700" y1="137" x2="790" y2="137" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-green)"/>
+  <text x="745" y="129" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#3fb950">event log</text>
+
+  <!-- Phase 1 → Phase 2 connector -->
+  <line x1="840" y1="137" x2="840" y2="246" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="4,3"/>
+
+  <!-- ════════════════════════════════════════════
+       PHASE 2 — On-Chain Listener
+  ════════════════════════════════════════════ -->
+  <rect x="0" y="260" width="980" height="124" fill="url(#phase2-grad)" rx="0"/>
+  <text x="490" y="282" text-anchor="middle" font-family="'SF Mono',monospace" font-size="11" font-weight="700" fill="#3fb950" letter-spacing="2">PHASE 2 — EVENT LISTENER TRIGGER</text>
+
+  <!-- OnChainListener box -->
+  <rect x="716" y="293" width="234" height="68" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="833" y="315" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="13" font-weight="700" fill="#f0f6fc">🔌 OnChainListener</text>
+  <text x="833" y="332" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#8b949e">onChainListener.js</text>
+  <text x="833" y="349" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#3fb950">ethers.on('ProjectSubmitted', …)</text>
+
+  <!-- Arrow: down to listener -->
+  <line x1="840" y1="246" x2="840" y2="291" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arr-green)"/>
+
+  <!-- Fetch project data -->
+  <rect x="400" y="293" width="224" height="68" rx="8" fill="#1a2d1a" stroke="#2d5a2d" stroke-width="1"/>
+  <text x="512" y="315" text-anchor="middle" font-family="'SF Mono',monospace" font-size="10" fill="#3fb950">im.projects(projectId)</text>
+  <text x="512" y="331" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">fetch bizApi (deckUrl)</text>
+  <text x="512" y="347" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">+ applicant address</text>
+  <text x="512" y="363" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#6e7681">read-only call →</text>
+
+  <line x1="716" y1="327" x2="626" y2="327" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arr-green)"/>
+
+  <!-- AuditScheduler -->
+  <rect x="126" y="293" width="222" height="68" rx="8" fill="#1a2d1a" stroke="#2d5a2d" stroke-width="1"/>
+  <text x="237" y="315" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="600" fill="#f0f6fc">📋 AuditScheduler</text>
+  <text x="237" y="333" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#8b949e">enqueue({ projectId, deckUrl,</text>
+  <text x="237" y="348" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#8b949e">deckHash, onComplete: cb })</text>
+
+  <line x1="400" y1="327" x2="350" y2="327" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arr-green)"/>
+
+  <!-- ════════════════════════════════════════════
+       PHASE 3 — Multi-Agent Analysis
+  ════════════════════════════════════════════ -->
+  <rect x="0" y="398" width="980" height="488" fill="url(#phase3-grad)" rx="0"/>
+  <text x="490" y="420" text-anchor="middle" font-family="'SF Mono',monospace" font-size="11" font-weight="700" fill="#bc8cff" letter-spacing="2">PHASE 3 — MULTI-AGENT AI ANALYSIS</text>
+
+  <!-- Orchestrator -->
+  <rect x="330" y="432" width="320" height="56" rx="8" fill="#1e1a2e" stroke="#bc8cff" stroke-width="2"/>
+  <text x="490" y="454" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="14" font-weight="700" fill="#f0f6fc">🎯 MultiAgentOrchestrator</text>
+  <text x="490" y="473" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#8b949e">fetch pitch deck → share deckSummary</text>
+
+  <!-- Arrow from scheduler to orchestrator -->
+  <line x1="237" y1="361" x2="237" y2="432" stroke="#bc8cff" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <line x1="237" y1="432" x2="328" y2="460" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#arr-purple)"/>
+
+  <!-- Pitch deck fetch -->
+  <rect x="750" y="432" width="196" height="56" rx="8" fill="#1e1a2e" stroke="#6e40c9" stroke-width="1"/>
+  <text x="848" y="452" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" font-weight="600" fill="#f0f6fc">📄 PitchDeckFetcher</text>
+  <text x="848" y="469" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">PDF / Drive / Dropbox</text>
+  <text x="848" y="483" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#6e7681">→ text extraction</text>
+  <line x1="650" y1="460" x2="748" y2="460" stroke="#6e40c9" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-purple)"/>
+  <line x1="750" y1="460" x2="652" y2="460" stroke="#6e40c9" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-purple)"/>
+
+  <!-- "parallel" label -->
+  <text x="490" y="524" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" fill="#8b949e" font-style="italic">Promise.allSettled — 3 agents run in parallel</text>
+
+  <!-- Agent boxes -->
+  <!-- PitchDeckAnalysisAgent -->
+  <rect x="28" y="536" width="270" height="160" rx="8" fill="#161b22" stroke="#bc8cff" stroke-width="1.5"/>
+  <text x="163" y="558" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="700" fill="#f0f6fc">📊 PitchDeckAnalysisAgent</text>
+  <text x="163" y="574" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#bc8cff">weight: 40%</text>
+  <!-- dimensions -->
+  <text x="42" y="592" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">• problem_solution</text>
+  <text x="42" y="607" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">• market_opportunity</text>
+  <text x="42" y="622" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">• team_execution</text>
+  <text x="42" y="637" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">• traction</text>
+  <text x="42" y="652" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">• tokenomics</text>
+  <text x="42" y="667" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">• web3_rationale</text>
+  <rect x="42" y="678" width="240" height="10" rx="3" fill="#1e1a2e"/>
+  <rect x="42" y="678" width="165" height="10" rx="3" fill="#bc8cff" opacity="0.6"/>
+  <text x="163" y="686" text-anchor="middle" font-family="'SF Mono',monospace" font-size="8" fill="#f0f6fc">overallScore  0 – 100</text>
+
+  <!-- RiskAssessmentAgent -->
+  <rect x="355" y="536" width="270" height="160" rx="8" fill="#161b22" stroke="#bc8cff" stroke-width="1.5"/>
+  <text x="490" y="558" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="700" fill="#f0f6fc">⚠️  RiskAssessmentAgent</text>
+  <text x="490" y="574" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#bc8cff">weight: 35%  (inverted)</text>
+  <text x="370" y="592" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">• team_risk</text>
+  <text x="370" y="607" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">• market_risk</text>
+  <text x="370" y="622" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">• execution_risk</text>
+  <text x="370" y="637" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">• regulatory_risk</text>
+  <text x="370" y="652" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">• competitive_risk</text>
+  <rect x="370" y="678" width="240" height="10" rx="3" fill="#1e1a2e"/>
+  <rect x="370" y="678" width="130" height="10" rx="3" fill="#bc8cff" opacity="0.6"/>
+  <text x="490" y="686" text-anchor="middle" font-family="'SF Mono',monospace" font-size="8" fill="#f0f6fc">riskScore  0 – 100  (lower = safer)</text>
+
+  <!-- BusinessAnalysisAgent -->
+  <rect x="682" y="536" width="270" height="160" rx="8" fill="#161b22" stroke="#bc8cff" stroke-width="1.5"/>
+  <text x="817" y="558" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="700" fill="#f0f6fc">💼 BusinessAnalysisAgent</text>
+  <text x="817" y="574" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#bc8cff">weight: 25%</text>
+  <text x="696" y="592" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">• revenue_model</text>
+  <text x="696" y="607" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">• token_utility</text>
+  <text x="696" y="622" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">• token_distribution</text>
+  <text x="696" y="637" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">• governance</text>
+  <text x="696" y="652" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">• competitive_moat</text>
+  <rect x="696" y="678" width="240" height="10" rx="3" fill="#1e1a2e"/>
+  <rect x="696" y="678" width="100" height="10" rx="3" fill="#bc8cff" opacity="0.6"/>
+  <text x="817" y="686" text-anchor="middle" font-family="'SF Mono',monospace" font-size="8" fill="#f0f6fc">sustainabilityScore  0 – 100</text>
+
+  <!-- Arrows: Orchestrator → Agents -->
+  <line x1="400" y1="488" x2="190" y2="534" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#arr-purple)"/>
+  <line x1="490" y1="488" x2="490" y2="534" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#arr-purple)"/>
+  <line x1="580" y1="488" x2="790" y2="534" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#arr-purple)"/>
+
+  <!-- LLM label on arrow -->
+  <rect x="60" y="500" width="135" height="16" rx="3" fill="#0d1117"/>
+  <text x="128" y="511" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#bc8cff">MiniMax-M2.7 / GPT-4o</text>
+
+  <!-- Arrows: Agents → ConsensusEngine -->
+  <line x1="163" y1="696" x2="270" y2="768" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#arr-purple)"/>
+  <line x1="490" y1="696" x2="490" y2="768" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#arr-purple)"/>
+  <line x1="817" y1="696" x2="715" y2="768" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#arr-purple)"/>
+
+  <!-- red_flags label -->
+  <text x="163" y="728" text-anchor="middle" font-family="'SF Mono',monospace" font-size="8.5" fill="#f85149">red_flags → −1500 bp</text>
+
+  <!-- ConsensusEngine -->
+  <rect x="270" y="770" width="440" height="76" rx="8" fill="#1e1a2e" stroke="#bc8cff" stroke-width="2"/>
+  <text x="490" y="794" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="14" font-weight="700" fill="#f0f6fc">⚖️  ConsensusEngine</text>
+  <text x="490" y="812" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#8b949e">score = (pd×0.40 + (100−risk)×0.35 + biz×0.25) × 100</text>
+  <text x="490" y="828" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#8b949e">if red_flags → score −= 1500 bp   |   range: [low, high]</text>
+  <text x="490" y="844" text-anchor="middle" font-family="'SF Mono',monospace" font-size="10" font-weight="600" fill="#bc8cff">finalScore  0 – 10 000  (basis points)</text>
+
+  <!-- ReportGenerator -->
+  <rect x="340" y="870" width="300" height="52" rx="8" fill="#1e1a2e" stroke="#6e40c9" stroke-width="1.5"/>
+  <text x="490" y="892" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="700" fill="#f0f6fc">📝 ReportGenerator</text>
+  <text x="490" y="910" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">JSON report → keccak256 → reportHash (bytes32)</text>
+  <line x1="490" y1="846" x2="490" y2="868" stroke="#bc8cff" stroke-width="1.5" marker-end="url(#arr-purple)"/>
+
+  <!-- ════════════════════════════════════════════
+       PHASE 4 — On-Chain Fulfillment
+  ════════════════════════════════════════════ -->
+  <rect x="0" y="946" width="980" height="260" fill="url(#phase4-grad)" rx="0"/>
+  <text x="490" y="968" text-anchor="middle" font-family="'SF Mono',monospace" font-size="11" font-weight="700" fill="#e3b341" letter-spacing="2">PHASE 4 — ON-CHAIN FULFILLMENT</text>
+
+  <!-- Oracle wallet -->
+  <rect x="716" y="980" width="234" height="66" rx="8" fill="#161b22" stroke="#e3b341" stroke-width="1.5"/>
+  <text x="833" y="1002" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="13" font-weight="700" fill="#f0f6fc">🔮 Oracle Wallet</text>
+  <text x="833" y="1020" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#8b949e">AI_ORACLE_ROLE holder</text>
+  <text x="833" y="1036" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#e3b341">Hardhat account [2]</text>
+
+  <!-- Arrow: ReportGenerator → Oracle -->
+  <line x1="640" y1="896" x2="716" y2="996" stroke="#e3b341" stroke-width="1.5" marker-end="url(#arr-orange)"/>
+  <text x="695" y="950" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#e3b341" transform="rotate(-35 695 950)">score + hash</text>
+
+  <!-- fulfillAudit call -->
+  <line x1="716" y1="1013" x2="648" y2="1013" stroke="#e3b341" stroke-width="2" marker-end="url(#arr-orange)"/>
+  <text x="682" y="1005" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#e3b341">fulfillAudit()</text>
+
+  <!-- InvestmentManager (phase 4) -->
+  <rect x="330" y="980" width="318" height="66" rx="8" fill="#161b22" stroke="#e3b341" stroke-width="1.5"/>
+  <text x="489" y="1002" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="13" font-weight="700" fill="#f0f6fc">📜 InvestmentManager.sol</text>
+  <text x="489" y="1020" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#8b949e">stores: score, scoreLow, scoreHigh,</text>
+  <text x="489" y="1036" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#8b949e">reportHash, auditedAt</text>
+
+  <!-- Decision diamond -->
+  <polygon points="490,1072 560,1106 490,1140 420,1106" fill="#2d1f0d" stroke="#e3b341" stroke-width="1.5"/>
+  <text x="490" y="1101" text-anchor="middle" font-family="'SF Mono',monospace" font-size="10" font-weight="700" fill="#e3b341">score</text>
+  <text x="490" y="1115" text-anchor="middle" font-family="'SF Mono',monospace" font-size="10" font-weight="700" fill="#e3b341">≥ 8000?</text>
+  <line x1="489" y1="1046" x2="489" y2="1070" stroke="#e3b341" stroke-width="1.5" marker-end="url(#arr-orange)"/>
+
+  <!-- YES path -->
+  <line x1="560" y1="1106" x2="650" y2="1106" stroke="#3fb950" stroke-width="2" marker-end="url(#arr-green)"/>
+  <text x="605" y="1098" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" fill="#3fb950" font-weight="700">YES</text>
+  <rect x="650" y="1082" width="180" height="48" rx="6" fill="#1c2a1c" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="740" y="1102" text-anchor="middle" font-family="'SF Mono',monospace" font-size="10" fill="#3fb950">status = Approved</text>
+  <text x="740" y="1118" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">→ Phase 5</text>
+
+  <!-- NO path -->
+  <line x1="420" y1="1106" x2="330" y2="1106" stroke="#f85149" stroke-width="2" marker-end="url(#arr-red)"/>
+  <text x="375" y="1098" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" fill="#f85149" font-weight="700">NO</text>
+  <rect x="150" y="1082" width="178" height="48" rx="6" fill="#2d0d0d" stroke="#f85149" stroke-width="1.5"/>
+  <text x="239" y="1102" text-anchor="middle" font-family="'SF Mono',monospace" font-size="10" fill="#f85149">status = Rejected</text>
+  <text x="239" y="1118" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">Vault TVL unchanged</text>
+
+  <!-- emit AuditCompleted -->
+  <text x="489" y="1170" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#3fb950">emit AuditCompleted(projectId, score, scoreLow, scoreHigh, reportHash)</text>
+
+  <!-- ════════════════════════════════════════════
+       PHASE 5 — Investment Execution
+  ════════════════════════════════════════════ -->
+  <rect x="0" y="1192" width="980" height="280" fill="url(#phase5-grad)" rx="0"/>
+  <text x="490" y="1214" text-anchor="middle" font-family="'SF Mono',monospace" font-size="11" font-weight="700" fill="#3fb950" letter-spacing="2">PHASE 5 — INVESTMENT EXECUTION  (score ≥ 8000 only)</text>
+
+  <!-- Arrow from approved to Phase 5 -->
+  <line x1="740" y1="1130" x2="740" y2="1226" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <line x1="740" y1="1226" x2="652" y2="1252" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arr-green)"/>
+
+  <!-- executeInvestment call -->
+  <rect x="330" y="1228" width="318" height="68" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="489" y="1250" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="700" fill="#f0f6fc">executeInvestment()</text>
+  <text x="489" y="1266" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#8b949e">projectId, amount, vestingSchedule</text>
+  <text x="489" y="1282" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#3fb950">onlyRole(AI_ORACLE_ROLE)</text>
+
+  <!-- Oracle → executeInvestment -->
+  <line x1="716" y1="1262" x2="650" y2="1262" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arr-green)"/>
+
+  <!-- FundVault -->
+  <rect x="30" y="1228" width="220" height="68" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="140" y="1250" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="700" fill="#f0f6fc">🏦 FundVault.sol</text>
+  <text x="140" y="1267" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#8b949e">divestForInvestment(amount)</text>
+  <text x="140" y="1283" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">aWETH → WETH → ETH</text>
+
+  <!-- Arrow to FundVault -->
+  <line x1="330" y1="1262" x2="252" y2="1262" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arr-green)"/>
+
+  <!-- ETH to applicant -->
+  <rect x="730" y="1228" width="220" height="68" rx="8" fill="#161b22" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="840" y="1250" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="700" fill="#f0f6fc">👤 Applicant</text>
+  <text x="840" y="1267" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#3fb950">receives ETH</text>
+  <text x="840" y="1283" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9" fill="#8b949e">call{value: amount}(applicant)</text>
+
+  <!-- FundVault → ETH → Applicant -->
+  <line x1="140" y1="1296" x2="140" y2="1340" stroke="#3fb950" stroke-width="1.5"/>
+  <line x1="140" y1="1340" x2="820" y2="1340" stroke="#3fb950" stroke-width="2"/>
+  <line x1="820" y1="1340" x2="820" y2="1298" stroke="#3fb950" stroke-width="2" marker-end="url(#arr-green)"/>
+  <text x="490" y="1332" text-anchor="middle" font-family="'SF Mono',monospace" font-size="10" fill="#3fb950" font-weight="600">ETH transfer</text>
+
+  <!-- Final state box -->
+  <rect x="260" y="1370" width="460" height="48" rx="8" fill="#0d2d1a" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="490" y="1390" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="12" font-weight="700" fill="#3fb950">✓ Project status → Active</text>
+  <text x="490" y="1408" text-anchor="middle" font-family="'SF Mono',monospace" font-size="9.5" fill="#8b949e">emit InvestmentExecuted(projectId, amount)  |  Vault TVL −= amount</text>
+
+  <line x1="489" y1="1296" x2="489" y2="1368" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr-green)"/>
+</svg>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div>Blockchain / Smart Contracts</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#3fb950"></div>AI Service / Event Flow</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#bc8cff"></div>AI Agent Analysis</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#e3b341"></div>Oracle Fulfillment</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div>Rejection Path</div>
+</div>
+
+</body>
+</html>
