@@ -23,10 +23,10 @@ const config = {
       url: "http://127.0.0.1:8545",
       chainId: 31337,
     },
-    // 0G Galileo Testnet
+    // 0G Galileo Testnet (actual chainId: 16602)
     zeroGTestnet: {
       url: "https://evmrpc-testnet.0g.ai",
-      chainId: 16600,
+      chainId: 16602,
       accounts: process.env.DEPLOYER_PRIVATE_KEY
         ? [process.env.DEPLOYER_PRIVATE_KEY]
         : [],
