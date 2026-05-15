@@ -75,6 +75,24 @@ async function main() {
   await mpcGateway.waitForDeployment();
   console.log('MPCGateway deployed to:', await mpcGateway.getAddress());
 
+  // Deploy AgentRegistry
+  console.log('\nDeploying AgentRegistry...');
+  const AgentRegistry = await ethers.getContractFactory('AgentRegistry');
+  const agentRegistry = await AgentRegistry.deploy();
+  await agentRegistry.waitForDeployment();
+  console.log('AgentRegistry deployed to:', await agentRegistry.getAddress());
+
+  // Deploy AgentVoting
+  console.log('\nDeploying AgentVoting...');
+  const AgentVoting = await ethers.getContractFactory('AgentVoting');
+  const agentVoting = await AgentVoting.deploy(
+    await agentRegistry.getAddress(),
+    await investmentManager.getAddress(),
+    await fundToken.getAddress()
+  );
+  await agentVoting.waitForDeployment();
+  console.log('AgentVoting deployed to:', await agentVoting.getAddress());
+
   // Setup roles
   console.log('\nSetting up roles...');
 
@@ -90,31 +108,57 @@ async function main() {
   await fundVault.grantRole(INVESTOR_ROLE, await investmentManager.getAddress());
   console.log('FundVault INVESTOR_ROLE granted to InvestmentManager');
 
-  // InvestmentManager roles
-  const AI_ORACLE_ROLE = await investmentManager.AI_ORACLE_ROLE();
+  // InvestmentManager roles — AgentVoting holds AI_ORACLE_ROLE (not OmniOracle directly)
+  const AI_ORACLE_ROLE  = await investmentManager.AI_ORACLE_ROLE();
   const RISK_AGENT_ROLE = await investmentManager.RISK_AGENT_ROLE();
-  await investmentManager.grantRole(AI_ORACLE_ROLE, await omniOracle.getAddress());
+  await investmentManager.grantRole(AI_ORACLE_ROLE,  await agentVoting.getAddress());
   await investmentManager.grantRole(RISK_AGENT_ROLE, deployer.address);
-  console.log('InvestmentManager roles granted');
+  console.log('InvestmentManager AI_ORACLE_ROLE granted to AgentVoting');
+  console.log('InvestmentManager RISK_AGENT_ROLE granted to deployer');
 
   // OmniOracle roles
   const AUDIT_EXECUTOR_ROLE = await omniOracle.AUDIT_EXECUTOR_ROLE();
   await omniOracle.grantRole(AUDIT_EXECUTOR_ROLE, deployer.address);
   console.log('OmniOracle AUDIT_EXECUTOR_ROLE granted');
 
+  // Register agent wallets in AgentRegistry (from env vars)
+  const agentKeys = [
+    process.env.AGENT1_ADDRESS,
+    process.env.AGENT2_ADDRESS,
+    process.env.AGENT3_ADDRESS,
+  ].filter(Boolean);
+
+  if (agentKeys.length > 0) {
+    console.log(`\nRegistering ${agentKeys.length} AI agent(s)...`);
+    for (const addr of agentKeys) {
+      await agentRegistry.addAgent(addr);
+      console.log('  Registered agent:', addr);
+    }
+  } else {
+    console.log('\n⚠️  No AGENT1_ADDRESS / AGENT2_ADDRESS / AGENT3_ADDRESS set.');
+    console.log('   Run: npx hardhat run scripts/register-agents.ts after setting env vars.');
+  }
+
   console.log('\n=== Deployment Summary ===');
   console.log('FundToken:', await fundToken.getAddress());
   console.log('FundVault:', await fundVault.getAddress());
   console.log('InvestmentManager:', await investmentManager.getAddress());
+  console.log('AgentRegistry:', await agentRegistry.getAddress());
+  console.log('AgentVoting:', await agentVoting.getAddress());
   console.log('PromptRegistry:', await promptRegistry.getAddress());
   console.log('AuditTrail:', await auditTrail.getAddress());
   console.log('OmniOracle:', await omniOracle.getAddress());
   console.log('MPCGateway:', await mpcGateway.getAddress());
 
+  console.log('\n=== Configuration for ai-service .env ===');
+  console.log('INVESTMENT_MANAGER_ADDRESS=' + await investmentManager.getAddress());
+  console.log('AGENT_VOTING_ADDRESS=' + await agentVoting.getAddress());
+
   console.log('\n=== Configuration for frontend .env.local ===');
   console.log('NEXT_PUBLIC_FUND_VAULT_ADDRESS=' + await fundVault.getAddress());
   console.log('NEXT_PUBLIC_FUND_TOKEN_ADDRESS=' + await fundToken.getAddress());
   console.log('NEXT_PUBLIC_INVESTMENT_MANAGER_ADDRESS=' + await investmentManager.getAddress());
+  console.log('NEXT_PUBLIC_AGENT_VOTING_ADDRESS=' + await agentVoting.getAddress());
 }
 
 main()
