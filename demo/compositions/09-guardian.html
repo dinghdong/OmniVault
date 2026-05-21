@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { width: 1920px; height: 1080px; overflow: hidden; background: #08090d;
+           font-family: 'Inter', sans-serif; color: #f0f2f5; }
+    .bg {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 700px 500px at 25% 50%, rgba(249,115,22,0.04) 0%, transparent 70%),
+                  radial-gradient(ellipse 500px 400px at 75% 50%, rgba(167,139,250,0.04) 0%, transparent 70%);
+    }
+    .scene-label { position: absolute; top: 48px; left: 80px; font-size: 12px;
+      letter-spacing: 0.12em; color: #8b949e; font-family: 'IBM Plex Mono', monospace; opacity: 0; }
+
+    .layout { position: absolute; inset: 80px; display: flex; gap: 40px; align-items: flex-start; opacity: 0; }
+
+    .title-col { width: 480px; flex-shrink: 0; padding-top: 20px; }
+    .tag { display: inline-block; padding: 4px 12px; background: rgba(249,115,22,0.12);
+           border: 1px solid rgba(249,115,22,0.3); border-radius: 6px; color: #f97316;
+           font-size: 12px; font-family: 'IBM Plex Mono', monospace; margin-bottom: 20px; }
+    h2 { font-size: 48px; font-weight: 800; line-height: 1.1; margin-bottom: 18px; }
+    .grad-o { background: linear-gradient(135deg, #f97316, #dc2626);
+              -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .desc { font-size: 16px; color: #8b949e; line-height: 1.7; margin-bottom: 28px; }
+
+    .guardian-card {
+      padding: 20px 24px; border-radius: 14px; margin-bottom: 16px;
+      display: flex; align-items: flex-start; gap: 16px;
+    }
+    .g-icon { font-size: 32px; flex-shrink: 0; }
+    .g-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+    .g-sub { font-size: 13px; color: #8b949e; line-height: 1.5; }
+    .g-chip { display: inline-block; padding: 2px 8px; border-radius: 4px;
+              font-size: 11px; font-family: 'IBM Plex Mono', monospace; margin-top: 8px; }
+
+    /* Terminal */
+    .terminal-col { flex: 1; display: flex; flex-direction: column; gap: 20px; }
+    .terminal {
+      background: #070810; border: 1px solid rgba(255,255,255,0.1); border-radius: 14px;
+      overflow: hidden;
+    }
+    .terminal-bar {
+      padding: 12px 16px; background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .t-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .terminal-title { font-size: 12px; color: #8b949e; font-family: 'IBM Plex Mono', monospace;
+                      margin-left: 8px; }
+    .terminal-body { padding: 20px; font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+                     line-height: 1.8; min-height: 200px; }
+    .log { color: #8b949e; opacity: 0; }
+    .log .ts { color: #484f58; }
+    .log .ok { color: #00ff88; }
+    .log .warn { color: #facc15; }
+    .log .err { color: #f87171; }
+    .log .info { color: #63b3ed; }
+    .log .pulse { display: inline-block; animation: blink 1s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* Heartbeat viz */
+    .heartbeat-card {
+      background: #0d1117; border: 1px solid rgba(249,115,22,0.2); border-radius: 14px; padding: 24px;
+    }
+    .hb-title { font-size: 14px; font-weight: 600; color: #f97316; margin-bottom: 16px; }
+    .hb-row { display: flex; align-items: center; gap: 16px; padding: 10px 0;
+              border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .hb-row:last-child { border-bottom: none; }
+    .hb-proj { width: 80px; font-size: 12px; font-family: 'IBM Plex Mono', monospace; color: #00ff88; }
+    .hb-bar { flex: 1; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; }
+    .hb-fill { height: 100%; border-radius: 2px; }
+    .hb-status { font-size: 11px; font-family: 'IBM Plex Mono', monospace; width: 100px; text-align: right; }
+
+    /* circuit break */
+    .cb-card {
+      background: rgba(248,113,113,0.05); border: 1px solid rgba(248,113,113,0.2);
+      border-radius: 14px; padding: 20px; display: flex; align-items: center; gap: 16px; opacity: 0;
+    }
+    .cb-icon { font-size: 36px; }
+    .cb-title { font-size: 15px; font-weight: 700; color: #f87171; }
+    .cb-sub { font-size: 12px; color: #8b949e; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="guardian" data-start="0" data-duration="20" data-width="1920" data-height="1080">
+  <div class="bg"></div>
+  <div class="scene-label" id="lbl">SCENE 09 — GUARDIAN SERVICES</div>
+
+  <div class="layout" id="layout">
+    <!-- Left -->
+    <div class="title-col">
+      <div class="tag">⚡ Always On</div>
+      <h2>Guardian<br><span class="grad-o">Services</span></h2>
+      <p class="desc">
+        Two guardian agents run continuously behind the scenes,
+        protecting LP capital against project abandonment and inactivity.
+      </p>
+
+      <div class="guardian-card" style="background:rgba(99,179,237,0.05);border:1px solid rgba(99,179,237,0.2)">
+        <div class="g-icon">🔍</div>
+        <div>
+          <div class="g-title">Monitoring Agent</div>
+          <div class="g-sub">Checks on-chain TX count + GitHub activity every 6 hours.
+            Automatically calls <code>triggerCircuitBreak()</code> on dark projects.</div>
+          <div class="g-chip" style="background:rgba(99,179,237,0.1);color:#63b3ed">6h cycle</div>
+        </div>
+      </div>
+
+      <div class="guardian-card" style="background:rgba(249,115,22,0.05);border:1px solid rgba(249,115,22,0.2)">
+        <div class="g-icon">💓</div>
+        <div>
+          <div class="g-title">Dead-Man Pinger</div>
+          <div class="g-sub">Pings every funded project's heartbeat contract daily.
+            If silent for 60 days, anyone can trigger <code>DeadManSwitch</code> fund recovery.</div>
+          <div class="g-chip" style="background:rgba(249,115,22,0.1);color:#f97316">24h heartbeat</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: terminals -->
+    <div class="terminal-col">
+      <!-- Monitoring agent terminal -->
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="t-dot" style="background:#f87171"></div>
+          <div class="t-dot" style="background:#facc15"></div>
+          <div class="t-dot" style="background:#00ff88"></div>
+          <div class="terminal-title">monitoring-agent.js · 6h cycle</div>
+        </div>
+        <div class="terminal-body">
+          <div class="log" id="m1"><span class="ts">[09:00:00]</span> <span class="info">ℹ</span> MonitoringAgent: cycle start · checking 3 active projects</div>
+          <div class="log" id="m2"><span class="ts">[09:00:01]</span> <span class="ok">✓</span> Project #1: 47 on-chain TXs · GitHub: 12 commits last 7d · <span class="ok">HEALTHY</span></div>
+          <div class="log" id="m3"><span class="ts">[09:00:02]</span> <span class="ok">✓</span> Project #2: 8 on-chain TXs · GitHub: 3 commits last 7d · <span class="ok">HEALTHY</span></div>
+          <div class="log" id="m4"><span class="ts">[09:00:03]</span> <span class="warn">⚠</span> Project #3: 0 on-chain TXs · GitHub: 0 commits (32 days) · <span class="warn">DARK</span></div>
+          <div class="log" id="m5"><span class="ts">[09:00:04]</span> <span class="err">⚡</span> triggerCircuitBreak(3) → tx 0xf4a2…c1d3 · status → CircuitBroken</div>
+          <div class="log" id="m6"><span class="ts">[09:00:05]</span> <span class="ok">✓</span> Cycle complete · 1 alert raised · next cycle in 6h</div>
+        </div>
+      </div>
+
+      <!-- Heartbeat terminal -->
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="t-dot" style="background:#f87171"></div>
+          <div class="t-dot" style="background:#facc15"></div>
+          <div class="t-dot" style="background:#00ff88"></div>
+          <div class="terminal-title">dead-man-pinger.js · 24h heartbeat</div>
+        </div>
+        <div class="terminal-body" style="min-height:140px">
+          <div class="log" id="h1"><span class="ts">[09:00:10]</span> <span class="info">ℹ</span> DeadManPinger: sending heartbeats to 2 active projects</div>
+          <div class="log" id="h2"><span class="ts">[09:00:11]</span> <span class="ok">✓</span> Project #1: heartbeat → <span class="ok">ALIVE</span> · last ping: 23h ago</div>
+          <div class="log" id="h3"><span class="ts">[09:00:11]</span> <span class="ok">✓</span> Project #2: heartbeat → <span class="ok">ALIVE</span> · last ping: 24h ago</div>
+          <div class="log" id="h4"><span class="ts">[09:00:12]</span> <span class="ok">✓</span> All projects alive · DeadManSwitch not triggered <span class="pulse">_</span></div>
+        </div>
+      </div>
+
+      <!-- Circuit break notification -->
+      <div class="cb-card" id="cbCard">
+        <div class="cb-icon">⚠</div>
+        <div>
+          <div class="cb-title">Circuit Breaker Triggered — Project #3</div>
+          <div class="cb-sub">32 days of inactivity detected · Status → CircuitBroken · LP capital protected</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+    </div>
+
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    window.__timelines = window.__timelines || {};
+    window.__timelines["guardian"] = tl;
+    tl.to("#lbl", { opacity: 1, duration: 0.5 });
+    tl.to("#layout", { opacity: 1, duration: 0.7, ease: "power3.out" }, 0.5);
+
+    // Monitoring logs appear
+    const mLogs = ["m1","m2","m3","m4","m5","m6"];
+    mLogs.forEach((id, i) => {
+      tl.to(`#${id}`, { opacity: 1, duration: 0.3 }, 2.0 + i * 1.2);
+    });
+
+    // Heartbeat logs
+    const hLogs = ["h1","h2","h3","h4"];
+    hLogs.forEach((id, i) => {
+      tl.to(`#${id}`, { opacity: 1, duration: 0.3 }, 9.0 + i * 0.8);
+    });
+
+    // Circuit break card
+    tl.to("#cbCard", { opacity: 1, y: -8, duration: 0.6, ease: "power3.out" }, 14.0);
+  </script>
+</body>
+</html>

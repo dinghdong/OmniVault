@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta data-duration="20000" data-fps="30" />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { width: 1920px; height: 1080px; overflow: hidden; background: #08090d;
+           font-family: 'Inter', sans-serif; color: #f0f2f5; }
+    .bg {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 1000px 600px at 50% 40%, rgba(0,255,136,0.04) 0%, transparent 70%);
+    }
+
+    .scene-label { position: absolute; top: 48px; left: 80px; font-size: 12px;
+      letter-spacing: 0.12em; color: #8b949e; font-family: 'IBM Plex Mono', monospace; opacity: 0; }
+
+    .dashboard { position: absolute; inset: 80px; display: flex; flex-direction: column; gap: 24px; opacity: 0; }
+
+    .dash-title {
+      font-size: 28px; font-weight: 800;
+      display: flex; align-items: center; gap: 14px;
+    }
+    .dash-badge { padding: 4px 12px; background: rgba(0,255,136,0.1);
+                  border: 1px solid rgba(0,255,136,0.3); border-radius: 6px;
+                  color: #00ff88; font-size: 12px; font-family: 'IBM Plex Mono', monospace; }
+
+    /* Stats grid */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+    .stat-card {
+      background: #0d1117; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px;
+      padding: 24px 28px; opacity: 0;
+    }
+    .stat-label { font-size: 12px; color: #8b949e; margin-bottom: 10px; letter-spacing: 0.05em; }
+    .stat-val { font-size: 36px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; }
+    .stat-sub { font-size: 12px; color: #8b949e; margin-top: 6px; }
+
+    /* Bottom row */
+    .bottom-row { display: flex; gap: 20px; flex: 1; min-height: 0; }
+
+    /* Sparkline card */
+    .sparkline-card {
+      flex: 1; background: #0d1117; border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px; padding: 28px; display: flex; flex-direction: column; opacity: 0;
+    }
+    .card-title-sm { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: #8b949e; }
+
+    /* Health bar */
+    .health-card {
+      flex: 1; background: #0d1117; border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px; padding: 28px; opacity: 0;
+    }
+    .health-bar { width: 100%; height: 12px; border-radius: 6px; overflow: hidden;
+                  display: flex; margin-bottom: 16px; }
+    .health-seg { height: 100%; }
+
+    .health-legend { display: flex; flex-wrap: wrap; gap: 12px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    /* Active projects */
+    .projects-card {
+      flex: 1.2; background: #0d1117; border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px; padding: 28px; opacity: 0;
+    }
+    .proj-row { display: flex; align-items: center; gap: 16px; padding: 14px 0;
+                border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .proj-row:last-child { border-bottom: none; }
+    .proj-num { font-size: 18px; font-weight: 700; color: #00ff88;
+                font-family: 'IBM Plex Mono', monospace; width: 36px; }
+    .proj-info { flex: 1; }
+    .proj-name { font-size: 14px; font-weight: 600; }
+    .proj-sub { font-size: 11px; color: #8b949e; font-family: 'IBM Plex Mono', monospace; margin-top: 3px; }
+    .proj-status { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-family: 'IBM Plex Mono', monospace; }
+    .proj-amt { font-size: 13px; font-family: 'IBM Plex Mono', monospace; color: #f0f2f5; min-width: 80px; text-align: right; }
+
+    /* ROI card */
+    .roi-card {
+      width: 320px; background: #0d1117;
+      border: 1px solid rgba(0,255,136,0.2); border-radius: 16px; padding: 28px; opacity: 0;
+      display: flex; flex-direction: column; gap: 0;
+    }
+    .roi-val { font-size: 52px; font-weight: 800; color: #00ff88;
+               font-family: 'IBM Plex Mono', monospace; line-height: 1; }
+  </style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="scene-label" id="lbl">SCENE 08 — LP DASHBOARD</div>
+
+  <div class="dashboard" id="dash">
+    <div class="dash-title">
+      Your LP Dashboard
+      <div class="dash-badge">Live · Sepolia</div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card" id="sc1">
+        <div class="stat-label">YOUR HOLDINGS</div>
+        <div class="stat-val" id="sv1">0.0000</div>
+        <div class="stat-sub">ETH — 0.042% of pool</div>
+      </div>
+      <div class="stat-card" id="sc2">
+        <div class="stat-label">VAULT TVL</div>
+        <div class="stat-val" id="sv2">0.0000</div>
+        <div class="stat-sub">via AAVE V3 rebasing</div>
+      </div>
+      <div class="stat-card" id="sc3">
+        <div class="stat-label">DEPLOYED CAPITAL</div>
+        <div class="stat-val" id="sv3">0.0000</div>
+        <div class="stat-sub">1 active project</div>
+      </div>
+      <div class="stat-card" id="sc4" style="border-color:rgba(255,255,255,0.08)">
+        <div class="stat-label">ALERTS</div>
+        <div class="stat-val" style="color:#00ff88">0</div>
+        <div class="stat-sub">No active alerts</div>
+      </div>
+    </div>
+
+    <div class="bottom-row">
+      <!-- Sparkline -->
+      <div class="sparkline-card" id="spark">
+        <div class="card-title-sm">Rebasing Curve — accrualFactor</div>
+        <svg viewBox="0 0 400 100" preserveAspectRatio="none" style="flex:1;width:100%">
+          <defs>
+            <linearGradient id="sf" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#00ff88" stop-opacity="0.2"/>
+              <stop offset="100%" stop-color="#00ff88" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path id="sparkFill" d="" fill="url(#sf)"/>
+          <path id="sparkLine" d="" stroke="#00ff88" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </svg>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:12px;color:#484f58;font-family:'IBM Plex Mono',monospace">
+          <span>Deposit</span>
+          <span style="color:#00ff88">+0.018% cumulative yield</span>
+          <span>Now</span>
+        </div>
+      </div>
+
+      <!-- Health bar -->
+      <div class="health-card" id="health">
+        <div class="card-title-sm">Pipeline Health — 3 projects</div>
+        <div class="health-bar">
+          <div class="health-seg" id="hs1" style="width:0%;background:#00ff88"></div>
+          <div class="health-seg" id="hs2" style="width:0%;background:#facc15"></div>
+          <div class="health-seg" id="hs3" style="width:0%;background:#63b3ed"></div>
+        </div>
+        <div class="health-legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#00ff88"></div>Active (1)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#facc15"></div>PendingExecution (1)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#63b3ed"></div>Auditing (1)</div>
+        </div>
+        <div style="margin-top:20px">
+          <div class="card-title-sm">accrualFactor</div>
+          <div style="font-size:28px;font-weight:700;color:#00ff88;font-family:'IBM Plex Mono',monospace">1.00018403</div>
+          <div style="font-size:12px;color:#8b949e;margin-top:4px">grows as AAVE yields flow into vault</div>
+        </div>
+      </div>
+
+      <!-- Projects list -->
+      <div class="projects-card" id="projList">
+        <div class="card-title-sm">Active Investments</div>
+        <div class="proj-row">
+          <div class="proj-num">#1</div>
+          <div class="proj-info">
+            <div class="proj-name">DeFi Protocol Alpha</div>
+            <div class="proj-sub">Invested 14 days ago · 42.3% vested</div>
+          </div>
+          <div class="proj-status" style="background:rgba(0,255,136,0.1);color:#00ff88">Active</div>
+          <div class="proj-amt">0.0050 ETH</div>
+        </div>
+        <div class="proj-row">
+          <div class="proj-num">#2</div>
+          <div class="proj-info">
+            <div class="proj-name">NFT Marketplace Beta</div>
+            <div class="proj-sub">Timelock expires in 23h 14m</div>
+          </div>
+          <div class="proj-status" style="background:rgba(167,139,250,0.1);color:#a78bfa">PendingExec</div>
+          <div class="proj-amt">0.0030 ETH</div>
+        </div>
+        <div class="proj-row">
+          <div class="proj-num">#3</div>
+          <div class="proj-info">
+            <div class="proj-name">omnivault-pitch-deck</div>
+            <div class="proj-sub">Chainlink DON processing…</div>
+          </div>
+          <div class="proj-status" style="background:rgba(99,179,237,0.1);color:#63b3ed">Auditing</div>
+          <div class="proj-amt">0.0050 ETH</div>
+        </div>
+      </div>
+
+      <!-- ROI -->
+      <div class="roi-card" id="roi">
+        <div class="card-title-sm">Portfolio ROI</div>
+        <div class="roi-val">+0.018%</div>
+        <div style="font-size:13px;color:#8b949e;margin-top:8px">Cumulative yield</div>
+        <div style="margin-top:24px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.06)">
+          <div class="card-title-sm">Pool Share</div>
+          <div style="font-size:24px;font-weight:700;font-family:'IBM Plex Mono',monospace">0.042%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Build sparkline
+    const W = 400, H = 100, POINTS = 24;
+    const pts = Array.from({length: POINTS}, (_, i) => {
+      const t = i / (POINTS - 1);
+      const y = 1 + 0.00018403 * t;
+      return [t * W, H - ((y - 1) / 0.00018403) * (H * 0.75) - 10];
+    });
+    const d = pts.map((p,i) => `${i===0?'M':'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+    const fill = d + ` L${W},${H} L0,${H} Z`;
+    document.getElementById("sparkLine").setAttribute("d", d);
+    document.getElementById("sparkFill").setAttribute("d", fill);
+
+    const tl = gsap.timeline();
+    tl.to("#lbl", { opacity: 1, duration: 0.5 });
+    tl.to("#dash", { opacity: 1, duration: 0.3 }, 0.3);
+
+    // Stats animate in
+    tl.to("#sc1", { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.8);
+    tl.to("#sc2", { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 1.0);
+    tl.to("#sc3", { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 1.2);
+    tl.to("#sc4", { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 1.4);
+
+    // Count up values
+    tl.add(() => {
+      const vals = [{id:"sv1",target:0.0100},{id:"sv2",target:0.2400},{id:"sv3",target:0.0080}];
+      vals.forEach(({id, target}) => {
+        let v = 0;
+        const iv = setInterval(() => {
+          v = Math.min(v + target/40, target);
+          document.getElementById(id).textContent = v.toFixed(4);
+          if (v >= target) clearInterval(iv);
+        }, 20);
+      });
+    }, 1.6);
+
+    // Bottom row
+    tl.to("#spark", { opacity: 1, duration: 0.6, ease: "power2.out" }, 4.0);
+    tl.to("#health", { opacity: 1, duration: 0.6, ease: "power2.out" }, 4.4);
+    tl.to("#projList", { opacity: 1, duration: 0.6, ease: "power2.out" }, 4.8);
+    tl.to("#roi", { opacity: 1, duration: 0.6, ease: "power2.out" }, 5.2);
+
+    // Health bar fill
+    tl.add(() => {
+      gsap.to("#hs1", {width:"33.3%", duration:1.2, ease:"power2.out"});
+      gsap.to("#hs2", {width:"33.3%", duration:1.2, ease:"power2.out", delay:0.3});
+      gsap.to("#hs3", {width:"33.3%", duration:1.2, ease:"power2.out", delay:0.6});
+    }, 5.5);
+  </script>
+</body>
+</html>

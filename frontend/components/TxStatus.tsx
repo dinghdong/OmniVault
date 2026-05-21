@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { TransactionState } from '../hooks/useVaultTransactions';
 
 export function explorerTxUrl(chainId: number, hash: string): string | null {
+  if (chainId === 16602)  return `https://chainscan-galileo.0g.ai/tx/${hash}`;
   if (chainId === 42161)  return `https://arbiscan.io/tx/${hash}`;
   if (chainId === 421614) return `https://sepolia.arbiscan.io/tx/${hash}`;
   if (chainId === 1)      return `https://etherscan.io/tx/${hash}`;

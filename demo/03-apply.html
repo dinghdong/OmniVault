@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta data-duration="35000" data-fps="30" />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { width: 1920px; height: 1080px; overflow: hidden; background: #08090d;
+           font-family: 'Inter', sans-serif; color: #f0f2f5; }
+    .bg { position: absolute; inset: 0;
+      background: radial-gradient(ellipse 700px 500px at 70% 40%, rgba(167,139,250,0.04) 0%, transparent 70%),
+                  radial-gradient(ellipse 600px 400px at 25% 60%, rgba(0,255,136,0.04) 0%, transparent 70%); }
+
+    .scene-label { position: absolute; top: 48px; left: 80px; font-size: 12px;
+      letter-spacing: 0.12em; color: #8b949e; font-family: 'IBM Plex Mono', monospace; opacity: 0; }
+
+    /* Left text */
+    .left { position: absolute; left: 80px; top: 50%; transform: translateY(-50%);
+             width: 560px; opacity: 0; }
+    .tag { display: inline-block; padding: 4px 12px; background: rgba(167,139,250,0.12);
+           border: 1px solid rgba(167,139,250,0.3); border-radius: 6px; color: #a78bfa;
+           font-size: 12px; font-family: 'IBM Plex Mono', monospace; margin-bottom: 24px; }
+    h2 { font-size: 54px; font-weight: 800; line-height: 1.1; margin-bottom: 20px; }
+    .grad-purple { background: linear-gradient(135deg, #a78bfa, #7c3aed);
+                   -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .desc { font-size: 17px; color: #8b949e; line-height: 1.7; margin-bottom: 32px; }
+    .step-list { display: flex; flex-direction: column; gap: 12px; }
+    .step-row {
+      display: flex; align-items: flex-start; gap: 16px; padding: 14px 16px;
+      border-radius: 10px; background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .step-row.active { border-color: rgba(0,255,136,0.3); background: rgba(0,255,136,0.05); }
+    .step-num { width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,0.08);
+                display: flex; align-items: center; justify-content: center; font-size: 13px;
+                font-weight: 700; flex-shrink: 0; }
+    .step-num.done { background: #00ff88; color: #08090d; }
+    .step-num.active { background: rgba(0,255,136,0.2); color: #00ff88; border: 1px solid #00ff88; }
+    .step-title { font-size: 14px; font-weight: 600; }
+    .step-sub { font-size: 12px; color: #8b949e; margin-top: 2px; }
+
+    /* Right: Apply form mockup */
+    .form-wrap { position: absolute; right: 80px; top: 50%; transform: translateY(-50%);
+                 opacity: 0; }
+    .form-card {
+      width: 560px; background: #0d1117;
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 20px;
+      padding: 36px; box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+    }
+    .form-title { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+    .form-sub { font-size: 14px; color: #8b949e; margin-bottom: 28px; line-height: 1.5; }
+
+    /* Upload zone */
+    .upload-zone {
+      border: 2px dashed rgba(255,255,255,0.15); border-radius: 14px;
+      padding: 32px; text-align: center; margin-bottom: 20px; cursor: pointer;
+      transition: all 0.3s;
+    }
+    .upload-zone.done {
+      border-color: rgba(0,255,136,0.4); background: rgba(0,255,136,0.04);
+    }
+    .upload-icon { font-size: 32px; margin-bottom: 10px; opacity: 0.5; }
+    .upload-label { font-size: 15px; color: #8b949e; }
+    .upload-hint { font-size: 12px; color: #484f58; margin-top: 6px; }
+    .upload-done { display: flex; align-items: center; gap: 14px; }
+    .upload-done-icon { width: 44px; height: 44px; border-radius: 50%;
+      background: rgba(0,255,136,0.1); border: 2px solid #00ff88;
+      display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+    .file-name { font-size: 15px; font-weight: 600; }
+    .file-hash { font-size: 11px; color: #00ff88; font-family: 'IBM Plex Mono', monospace; margin-top: 4px; }
+
+    /* Inputs */
+    .input-group { margin-bottom: 16px; }
+    .input-label { font-size: 12px; color: #8b949e; margin-bottom: 7px; }
+    .input-field {
+      width: 100%; padding: 12px 16px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px; color: #f0f2f5; font-size: 14px; font-family: 'IBM Plex Mono', monospace;
+    }
+    .input-field.active { border-color: rgba(0,255,136,0.4); }
+
+    .amount-row { display: flex; align-items: center;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; }
+    .amount-input { flex: 1; padding: 12px 16px; background: transparent; border: none;
+      color: #f0f2f5; font-size: 16px; font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
+    .amount-unit { padding: 12px 16px; color: #8b949e; border-left: 1px solid rgba(255,255,255,0.08); }
+
+    .btn-submit {
+      width: 100%; padding: 15px; margin-top: 20px;
+      background: #00ff88; border-radius: 12px; border: none;
+      font-size: 16px; font-weight: 700; color: #08090d; cursor: pointer;
+    }
+    .btn-submit.pending { background: rgba(0,255,136,0.15); color: #00ff88; }
+
+    /* Pipeline card that appears */
+    .pipeline-card {
+      position: absolute; right: 80px; bottom: 60px;
+      width: 480px; padding: 20px 24px;
+      background: #141921; border: 1px solid rgba(0,255,136,0.25); border-radius: 16px;
+      display: flex; align-items: center; gap: 20px;
+      box-shadow: 0 0 40px rgba(0,255,136,0.08); opacity: 0;
+    }
+    .proj-id { font-size: 28px; font-weight: 800; color: #00ff88;
+               font-family: 'IBM Plex Mono', monospace; }
+    .proj-badge {
+      display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+      background: rgba(250,204,21,0.12); border: 1px solid rgba(250,204,21,0.3);
+      border-radius: 6px; color: #facc15; font-size: 12px;
+    }
+    .proj-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: #facc15;
+                      animation: blink 1.5s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  </style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="scene-label" id="lbl">SCENE 03 — PROJECT APPLICATION</div>
+
+  <div class="left" id="left">
+    <div class="tag">Apply for Funding</div>
+    <h2>Submit Your<br><span class="grad-purple">Project</span></h2>
+    <p class="desc">
+      Upload your pitch deck. The AI audit runs via Chainlink Functions
+      calling 0G Compute — three rounds of verifiable inference,
+      result committed on-chain.
+    </p>
+    <div class="step-list">
+      <div class="step-row" id="s1">
+        <div class="step-num" id="n1">1</div>
+        <div>
+          <div class="step-title">Upload Pitch Deck</div>
+          <div class="step-sub">PDF/PPTX — fingerprint computed locally (keccak256)</div>
+        </div>
+      </div>
+      <div class="step-row" id="s2">
+        <div class="step-num" id="n2">2</div>
+        <div>
+          <div class="step-title">Project Info</div>
+          <div class="step-sub">GitHub URL or description passed to AI as context</div>
+        </div>
+      </div>
+      <div class="step-row" id="s3">
+        <div class="step-num" id="n3">3</div>
+        <div>
+          <div class="step-title">Funding Request</div>
+          <div class="step-sub">20% upfront · 80% vested over 52 weeks on-chain</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-wrap" id="form">
+    <div class="form-card">
+      <div class="form-title">Apply for Funding</div>
+      <div class="form-sub">
+        Upload your pitch deck. Chainlink Functions × 0G Compute audits automatically.
+      </div>
+
+      <!-- Upload zone -->
+      <div class="upload-zone" id="uploadZone">
+        <div id="uploadEmpty">
+          <div class="upload-icon">⬆</div>
+          <div class="upload-label">Drop your pitch deck here</div>
+          <div class="upload-hint">PDF, PPTX, Keynote, Markdown · click to browse</div>
+        </div>
+        <div class="upload-done" id="uploadDone" style="display:none">
+          <div class="upload-done-icon">✓</div>
+          <div>
+            <div class="file-name">omnivault-pitch-deck.pdf</div>
+            <div class="file-hash" id="fileHash">0x3a7f…c84d · 247 KB · click to replace</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Project info -->
+      <div class="input-group">
+        <div class="input-label">Project Info (optional)</div>
+        <div class="input-field active" id="infoField" style="min-height:56px">
+          <span id="infoText" style="color:#8b949e"></span>
+        </div>
+      </div>
+
+      <!-- Funding -->
+      <div class="input-group">
+        <div class="input-label">Funding Request (ETH)</div>
+        <div class="amount-row">
+          <div class="amount-input" id="amtInput">0.005</div>
+          <div class="amount-unit">ETH</div>
+        </div>
+      </div>
+
+      <button class="btn-submit" id="btnSubmit">Submit for AI Audit →</button>
+    </div>
+  </div>
+
+  <!-- Pipeline card -->
+  <div class="pipeline-card" id="pipeCard">
+    <div>
+      <div style="font-size:12px;color:#8b949e;font-family:'IBM Plex Mono',monospace;margin-bottom:6px">NEW PROJECT</div>
+      <div class="proj-id">#3</div>
+    </div>
+    <div style="flex:1">
+      <div style="font-size:15px;font-weight:600;margin-bottom:8px">omnivault-pitch-deck.pdf</div>
+      <div class="proj-badge"><span class="proj-badge-dot"></span> Pending AI Audit</div>
+      <div style="font-size:12px;color:#484f58;margin-top:6px;font-family:'IBM Plex Mono',monospace">
+        Requested: 0.005 ETH
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tl = gsap.timeline();
+
+    tl.to("#lbl", { opacity: 1, duration: 0.5 });
+    tl.to("#left", { opacity: 1, duration: 0.8, ease: "power3.out" }, 0.5);
+    tl.to("#form", { opacity: 1, y: 0, duration: 0.8, ease: "power3.out" }, 1.2);
+
+    // Step 1: Upload appears active
+    tl.add(() => {
+      document.getElementById("s1").classList.add("active");
+      document.getElementById("n1").classList.add("active");
+    }, 3.0);
+
+    // File dropped
+    tl.add(() => {
+      const zone = document.getElementById("uploadZone");
+      const empty = document.getElementById("uploadEmpty");
+      const done = document.getElementById("uploadDone");
+      zone.classList.add("done");
+      empty.style.display = "none";
+      done.style.display = "flex";
+      document.getElementById("n1").className = "step-num done";
+      document.getElementById("n1").textContent = "✓";
+
+      // Step 2 activates
+      document.getElementById("s2").classList.add("active");
+      document.getElementById("n2").classList.add("active");
+    }, 7.0);
+
+    // Type project info
+    const infoStr = "https://github.com/omnivault/protocol";
+    let idx = 0;
+    tl.add(() => {
+      const interval = setInterval(() => {
+        document.getElementById("infoText").textContent = infoStr.slice(0, idx++);
+        if (idx > infoStr.length) clearInterval(interval);
+      }, 60);
+    }, 9.0);
+
+    // Step 2 done, step 3
+    tl.add(() => {
+      document.getElementById("n2").className = "step-num done";
+      document.getElementById("n2").textContent = "✓";
+      document.getElementById("s3").classList.add("active");
+      document.getElementById("n3").classList.add("active");
+    }, 12.5);
+
+    // Step 3 done
+    tl.add(() => {
+      document.getElementById("n3").className = "step-num done";
+      document.getElementById("n3").textContent = "✓";
+    }, 17.0);
+
+    // Click submit
+    tl.add(() => {
+      document.getElementById("btnSubmit").textContent = "Confirm in MetaMask…";
+      document.getElementById("btnSubmit").className = "btn-submit pending";
+    }, 19.0);
+
+    // Confirmed
+    tl.add(() => {
+      document.getElementById("btnSubmit").textContent = "✓ Submitted on-chain";
+      document.getElementById("btnSubmit").style.background = "rgba(0,255,136,0.15)";
+      document.getElementById("btnSubmit").style.color = "#00ff88";
+    }, 23.0);
+
+    // Pipeline card appears
+    tl.to("#pipeCard", { opacity: 1, y: -20, duration: 0.7, ease: "power3.out" }, 25.0);
+  </script>
+</body>
+</html>

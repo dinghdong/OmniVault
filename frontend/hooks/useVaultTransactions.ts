@@ -56,6 +56,7 @@ export function useVaultTransactions() {
         address: fundVaultAddress,
         abi: fundVaultAbi,
         functionName: 'deposit',
+        chainId: contractChainId,
         value: amountWei,
         account: address,
       } as any);
@@ -73,6 +74,7 @@ export function useVaultTransactions() {
         address: fundVaultAddress,
         abi: fundVaultAbi,
         functionName: 'redeem',
+        chainId: contractChainId,
         args: [shares],
         account: address,
       } as any);

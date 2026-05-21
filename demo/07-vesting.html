@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta data-duration="30000" data-fps="30" />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { width: 1920px; height: 1080px; overflow: hidden; background: #08090d;
+           font-family: 'Inter', sans-serif; color: #f0f2f5; }
+    .bg {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 800px 600px at 35% 50%, rgba(0,255,136,0.05) 0%, transparent 70%),
+                  radial-gradient(ellipse 500px 400px at 75% 60%, rgba(99,179,237,0.03) 0%, transparent 70%);
+    }
+
+    .scene-label { position: absolute; top: 48px; left: 80px; font-size: 12px;
+      letter-spacing: 0.12em; color: #8b949e; font-family: 'IBM Plex Mono', monospace; opacity: 0; }
+
+    .layout { position: absolute; inset: 0; display: flex; align-items: center;
+               justify-content: center; gap: 80px; padding: 100px 80px 80px; opacity: 0; }
+
+    /* Left */
+    .left { width: 520px; flex-shrink: 0; }
+    .tag { display: inline-block; padding: 4px 12px; background: rgba(0,255,136,0.1);
+           border: 1px solid rgba(0,255,136,0.3); border-radius: 6px; color: #00ff88;
+           font-size: 12px; font-family: 'IBM Plex Mono', monospace; margin-bottom: 20px; }
+    h2 { font-size: 52px; font-weight: 800; line-height: 1.1; margin-bottom: 18px; }
+    .grad { background: linear-gradient(135deg, #00ff88, #00cc6a);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .desc { font-size: 17px; color: #8b949e; line-height: 1.7; margin-bottom: 32px; }
+
+    .split-list { display: flex; flex-direction: column; gap: 12px; }
+    .split-item {
+      display: flex; align-items: center; gap: 16px; padding: 16px 20px;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px;
+    }
+    .split-pct { font-size: 32px; font-weight: 800; color: #00ff88;
+                 font-family: 'IBM Plex Mono', monospace; width: 80px; flex-shrink: 0; }
+    .split-title { font-size: 15px; font-weight: 600; }
+    .split-sub { font-size: 12px; color: #8b949e; margin-top: 4px; }
+
+    /* Right: vesting card */
+    .vesting-card {
+      flex: 1; max-width: 800px; background: #0d1117;
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 40px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.4);
+    }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
+    .card-title { font-size: 20px; font-weight: 700; }
+    .card-badge { padding: 6px 14px; background: rgba(0,255,136,0.1);
+                  border: 1px solid rgba(0,255,136,0.3); border-radius: 100px;
+                  color: #00ff88; font-size: 13px; font-family: 'IBM Plex Mono', monospace; }
+
+    /* Progress bar */
+    .prog-section { margin-bottom: 32px; }
+    .prog-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .prog-label { font-size: 13px; color: #8b949e; }
+    .prog-pct { font-size: 22px; font-weight: 700; color: #00ff88;
+                font-family: 'IBM Plex Mono', monospace; }
+    .prog-track { width: 100%; height: 12px; background: rgba(255,255,255,0.06);
+                  border-radius: 6px; overflow: hidden; }
+    .prog-fill { height: 100%; border-radius: 6px; width: 0%;
+                 background: linear-gradient(90deg, #00ff88, #00cc6a);
+                 box-shadow: 0 0 12px rgba(0,255,136,0.4); }
+    .prog-sub { display: flex; justify-content: space-between; margin-top: 8px;
+                font-size: 12px; color: #484f58; font-family: 'IBM Plex Mono', monospace; }
+
+    /* Funding grid */
+    .funding-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+    .funding-cell { padding: 20px; background: rgba(255,255,255,0.03);
+                    border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; }
+    .f-label { font-size: 12px; color: #8b949e; margin-bottom: 8px; }
+    .f-val { font-size: 22px; font-weight: 600; font-family: 'IBM Plex Mono', monospace; }
+
+    /* Claim section */
+    .claim-section { padding: 24px; background: rgba(0,255,136,0.05);
+                     border: 1px solid rgba(0,255,136,0.2); border-radius: 14px; }
+    .claim-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .claim-label { font-size: 14px; font-weight: 600; color: #00ff88; }
+    .claim-amt { font-size: 24px; font-weight: 700; color: #00ff88;
+                 font-family: 'IBM Plex Mono', monospace; }
+    .btn-claim {
+      width: 100%; padding: 15px; border-radius: 12px; background: #00ff88;
+      border: none; font-size: 16px; font-weight: 700; color: #08090d; cursor: pointer;
+    }
+    .btn-claim.pending { background: rgba(0,255,136,0.15); color: #00ff88; }
+    .btn-claim.success { background: rgba(0,255,136,0.1); border: 1px solid #00ff88;
+                         color: #00ff88; display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+    /* Week timeline */
+    .week-timeline { margin-top: 20px; display: flex; gap: 2px; }
+    .week-block { flex: 1; height: 6px; border-radius: 1px; background: rgba(255,255,255,0.06); }
+    .week-block.filled { background: #00ff88; }
+    .week-block.partial { background: rgba(0,255,136,0.4); }
+  </style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="scene-label" id="lbl">SCENE 07 — VESTING & CLAIM PAYOUT</div>
+
+  <div class="layout" id="layout">
+    <div class="left">
+      <div class="tag">Active Investment</div>
+      <h2>Vesting<br><span class="grad">Schedule</span></h2>
+      <p class="desc">
+        Approved projects receive funds on a transparent schedule.
+        No invoices, no middlemen — just smart contract math.
+      </p>
+      <div class="split-list">
+        <div class="split-item">
+          <div class="split-pct">20%</div>
+          <div>
+            <div class="split-title">Upfront at Execution</div>
+            <div class="split-sub">Immediate release via executeInvestment()</div>
+          </div>
+        </div>
+        <div class="split-item">
+          <div class="split-pct">80%</div>
+          <div>
+            <div class="split-title">Linear Vesting — 52 Weeks</div>
+            <div class="split-sub">~1.54% unlocks per week · claim anytime</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="vesting-card">
+      <div class="card-header">
+        <div class="card-title">⚡ Vesting Schedule — Project #3</div>
+        <div class="card-badge">Active</div>
+      </div>
+
+      <div class="prog-section">
+        <div class="prog-header">
+          <div class="prog-label">Vesting Progress</div>
+          <div class="prog-pct" id="pct">0%</div>
+        </div>
+        <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+        <div class="prog-sub">
+          <span>Week 0</span>
+          <span id="weekNum">Week 0 / 52</span>
+          <span>Week 52</span>
+        </div>
+        <div class="week-timeline" id="weekTl"></div>
+      </div>
+
+      <div class="funding-grid">
+        <div class="funding-cell">
+          <div class="f-label">Total Invested</div>
+          <div class="f-val">0.0050 ETH</div>
+        </div>
+        <div class="funding-cell">
+          <div class="f-label">Released So Far</div>
+          <div class="f-val" id="released" style="color:#00ff88">0.0000 ETH</div>
+        </div>
+        <div class="funding-cell">
+          <div class="f-label">Claimable Now</div>
+          <div class="f-val" id="claimable" style="color:#00ff88">0.0000 ETH</div>
+        </div>
+        <div class="funding-cell">
+          <div class="f-label">Schedule</div>
+          <div class="f-val" style="font-size:14px;color:#8b949e">20% up · 80% / 52w</div>
+        </div>
+      </div>
+
+      <div class="claim-section">
+        <div class="claim-header">
+          <div class="claim-label">⚡ Claimable Now</div>
+          <div class="claim-amt" id="claimAmt">0.0000 ETH</div>
+        </div>
+        <button class="btn-claim" id="btnClaim">Claim Payout</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Build week timeline
+    const tl_el = document.getElementById("weekTl");
+    for (let i = 0; i < 52; i++) {
+      const b = document.createElement("div");
+      b.className = "week-block";
+      b.id = `wb${i}`;
+      tl_el.appendChild(b);
+    }
+
+    const tl = gsap.timeline();
+    tl.to("#lbl", { opacity: 1, duration: 0.5 });
+    tl.to("#layout", { opacity: 1, duration: 0.8, ease: "power3.out" }, 0.5);
+
+    // Animate vesting progress from 0 → 42.3%
+    tl.add(() => {
+      let pct = 0;
+      const targetPct = 42.3;
+      const targetWeek = Math.round(52 * targetPct / 100);
+      const iv = setInterval(() => {
+        pct = Math.min(pct + 0.8, targetPct);
+        const week = Math.round(52 * pct / 100);
+        document.getElementById("pct").textContent = pct.toFixed(1) + "%";
+        document.getElementById("progFill").style.width = pct + "%";
+        document.getElementById("weekNum").textContent = `Week ${week} / 52`;
+
+        const relEth = (0.001 + 0.004 * pct / 100).toFixed(4);
+        document.getElementById("released").textContent = relEth + " ETH";
+
+        const claimable = (0.001 + 0.0001 * pct).toFixed(4);
+        document.getElementById("claimable").textContent = claimable + " ETH";
+        document.getElementById("claimAmt").textContent = claimable + " ETH";
+
+        // Fill week blocks
+        for (let i = 0; i < 52; i++) {
+          const wb = document.getElementById(`wb${i}`);
+          if (i < week) wb.classList.add("filled");
+          else if (i === week) wb.classList.add("partial");
+        }
+
+        if (pct >= targetPct) clearInterval(iv);
+      }, 30);
+    }, 4.0);
+
+    // Claim button click
+    tl.add(() => {
+      document.getElementById("btnClaim").textContent = "Confirm in wallet…";
+      document.getElementById("btnClaim").className = "btn-claim pending";
+    }, 18.0);
+
+    // TX success
+    tl.add(() => {
+      document.getElementById("btnClaim").className = "btn-claim success";
+      document.getElementById("btnClaim").innerHTML = "✓ Payout Claimed";
+      document.getElementById("claimAmt").textContent = "0.0000 ETH";
+      document.getElementById("claimable").textContent = "0.0000 ETH";
+
+      // Released amount increases
+      document.getElementById("released").textContent = "0.0022 ETH";
+    }, 23.0);
+  </script>
+</body>
+</html>

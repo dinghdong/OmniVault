@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { width: 1920px; height: 1080px; overflow: hidden; background: #08090d;
+           font-family: 'Inter', sans-serif; color: #f0f2f5; }
+
+    .bg-mesh {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 800px 600px at 30% 50%, rgba(0,255,136,0.05) 0%, transparent 70%),
+                  radial-gradient(ellipse 600px 400px at 75% 30%, rgba(167,139,250,0.04) 0%, transparent 70%);
+    }
+
+    .scene-label {
+      position: absolute; top: 48px; left: 80px;
+      font-size: 12px; letter-spacing: 0.12em; color: #8b949e;
+      font-family: 'IBM Plex Mono', monospace;
+      opacity: 0;
+    }
+
+    /* Left: Explanation */
+    .left-panel {
+      position: absolute; left: 80px; top: 50%; transform: translateY(-50%);
+      width: 600px; opacity: 0;
+    }
+    .section-tag {
+      display: inline-block; padding: 4px 12px;
+      background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.3);
+      border-radius: 6px; color: #00ff88; font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace; margin-bottom: 24px;
+    }
+    h2 { font-size: 56px; font-weight: 800; line-height: 1.1; margin-bottom: 20px; }
+    .grad { background: linear-gradient(135deg, #00ff88, #00cc6a);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .desc { font-size: 18px; color: #8b949e; line-height: 1.7; margin-bottom: 36px; }
+
+    /* Flow diagram */
+    .flow { display: flex; align-items: center; gap: 0; margin-bottom: 32px; }
+    .flow-step {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      padding: 16px 20px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px; min-width: 120px;
+    }
+    .flow-icon { font-size: 28px; }
+    .flow-label { font-size: 12px; color: #8b949e; text-align: center; }
+    .flow-val { font-size: 13px; font-weight: 600; color: #f0f2f5; font-family: 'IBM Plex Mono', monospace; }
+    .flow-arrow { color: #00ff88; font-size: 20px; padding: 0 8px; flex-shrink: 0; }
+
+    /* Yield badge */
+    .yield-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 20px;
+      background: rgba(0,255,136,0.08); border: 1px solid rgba(0,255,136,0.25); border-radius: 12px;
+      font-size: 15px; color: #f0f2f5;
+    }
+    .yield-num { color: #00ff88; font-weight: 700; font-family: 'IBM Plex Mono', monospace; }
+
+    /* Right: Deposit modal mockup */
+    .modal-wrap {
+      position: absolute; right: 80px; top: 50%; transform: translateY(-50%);
+      opacity: 0;
+    }
+    .modal {
+      width: 480px; background: #0d1117;
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 20px;
+      overflow: hidden; box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+    }
+    .modal-header {
+      padding: 28px 32px 0;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-title { font-size: 22px; font-weight: 700; }
+    .modal-close { color: #8b949e; font-size: 20px; }
+    .modal-body { padding: 28px 32px 32px; }
+
+    .balance-row {
+      background: rgba(0,255,136,0.06); border: 1px solid rgba(0,255,136,0.2);
+      border-radius: 12px; padding: 16px 20px; margin-bottom: 24px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .bal-label { font-size: 12px; color: #8b949e; }
+    .bal-val { font-size: 18px; font-weight: 600; color: #00ff88;
+               font-family: 'IBM Plex Mono', monospace; }
+
+    .input-group { margin-bottom: 20px; }
+    .input-label { font-size: 12px; color: #8b949e; margin-bottom: 8px; }
+    .input-row {
+      display: flex; align-items: center;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px; overflow: hidden;
+    }
+    .input-field {
+      flex: 1; padding: 14px 16px; background: transparent; border: none;
+      color: #f0f2f5; font-size: 18px; font-family: 'IBM Plex Mono', monospace;
+      font-weight: 600;
+    }
+    .input-unit {
+      padding: 14px 16px; color: #8b949e; font-size: 14px;
+      border-left: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .info-row {
+      display: flex; justify-content: space-between;
+      font-size: 13px; color: #8b949e; margin-bottom: 8px;
+    }
+    .info-val { color: #f0f2f5; }
+    .info-highlight { color: #00ff88; font-family: 'IBM Plex Mono', monospace; }
+
+    .btn-deposit {
+      width: 100%; padding: 16px; margin-top: 24px;
+      background: #00ff88; border-radius: 12px;
+      font-size: 16px; font-weight: 700; color: #08090d;
+      cursor: pointer; border: none;
+    }
+
+    /* Confirmation overlay */
+    .confirm-overlay {
+      position: absolute; inset: 0; border-radius: 20px;
+      background: rgba(8,9,13,0.92);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; opacity: 0;
+    }
+    .confirm-circle {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: rgba(0,255,136,0.1); border: 2px solid #00ff88;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 32px;
+    }
+    .confirm-title { font-size: 22px; font-weight: 700; color: #00ff88; }
+    .confirm-sub { font-size: 14px; color: #8b949e; font-family: 'IBM Plex Mono', monospace; }
+
+    /* Balance update card */
+    .balance-card {
+      position: absolute; bottom: -100px; right: 80px;
+      width: 320px; padding: 20px 24px;
+      background: #0d1117; border: 1px solid rgba(0,255,136,0.3); border-radius: 16px;
+      box-shadow: 0 0 40px rgba(0,255,136,0.1);
+      opacity: 0;
+    }
+    .balance-card-label { font-size: 12px; color: #8b949e; margin-bottom: 8px; }
+    .balance-card-val { font-size: 36px; font-weight: 700; color: #00ff88;
+                        font-family: 'IBM Plex Mono', monospace; }
+    .balance-card-sub { font-size: 12px; color: #8b949e; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="deposit" data-start="0" data-duration="30" data-width="1920" data-height="1080">
+  <div class="bg-mesh"></div>
+  <div class="scene-label" id="lbl">SCENE 02 — LP DEPOSITS ETH</div>
+
+  <!-- Left panel -->
+  <div class="left-panel" id="left">
+    <div class="section-tag">Step 1 / 4</div>
+    <h2>Deposit ETH,<br>Earn <span class="grad">Yield</span></h2>
+    <p class="desc">
+      LP deposits are wrapped to WETH and supplied to AAVE V3 —
+      generating yield from the moment of deposit.
+      In return you receive <strong>FundToken (OVFT)</strong>,
+      a rebasing share token whose balance grows automatically.
+    </p>
+
+    <div class="flow" id="flow">
+      <div class="flow-step">
+        <div class="flow-icon">Ξ</div>
+        <div class="flow-val">ETH</div>
+        <div class="flow-label">Your deposit</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-icon">🔄</div>
+        <div class="flow-val">WETH</div>
+        <div class="flow-label">Wrapped</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-icon">📈</div>
+        <div class="flow-val">aWETH</div>
+        <div class="flow-label">AAVE V3</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step" style="border-color:rgba(0,255,136,0.3);background:rgba(0,255,136,0.06)">
+        <div class="flow-icon">🪙</div>
+        <div class="flow-val" style="color:#00ff88">OVFT</div>
+        <div class="flow-label">Rebasing shares</div>
+      </div>
+    </div>
+
+    <div class="yield-badge">
+      <span>📊</span>
+      <span>accrualFactor grows as yield accrues — </span>
+      <span class="yield-num">balanceOf() auto-compounds</span>
+    </div>
+  </div>
+
+  <!-- Right: Modal -->
+  <div class="modal-wrap" id="modal">
+    <div class="modal" style="position:relative">
+      <div class="modal-header">
+        <div class="modal-title">Deposit ETH</div>
+        <div class="modal-close">✕</div>
+      </div>
+      <div class="modal-body">
+        <div class="balance-row">
+          <div>
+            <div class="bal-label">Wallet Balance</div>
+            <div class="bal-val" id="walletBal">1.2400 ETH</div>
+          </div>
+          <div style="color:#8b949e;font-size:13px">Sepolia</div>
+        </div>
+
+        <div class="input-group">
+          <div class="input-label">Amount to Deposit</div>
+          <div class="input-row">
+            <div class="input-field" id="amountDisplay">0.01</div>
+            <div class="input-unit">ETH</div>
+          </div>
+        </div>
+
+        <div class="info-row"><span>You receive</span><span class="info-highlight" id="receiveAmt">0.0100 OVFT</span></div>
+        <div class="info-row"><span>Pool share</span><span class="info-val">+0.042%</span></div>
+        <div class="info-row"><span>Vault TVL after</span><span class="info-val">0.2400 ETH</span></div>
+        <div class="info-row"><span>AAVE supply rate</span><span class="info-val" style="color:#00ff88">≈ 3.2% APY</span></div>
+
+        <button class="btn-deposit" id="btnDeposit">Deposit ETH</button>
+      </div>
+
+      <!-- Confirmation overlay -->
+      <div class="confirm-overlay" id="confirm">
+        <div class="confirm-circle">✓</div>
+        <div class="confirm-title">Deposit Confirmed!</div>
+        <div class="confirm-sub">+0.0100 OVFT minted to your wallet</div>
+        <div style="font-size:12px;color:#484f58;font-family:'IBM Plex Mono',monospace">
+          0xf3a2…8c1b · Sepolia
+        </div>
+      </div>
+    </div>
+
+    <!-- Balance update floating card -->
+    <div class="balance-card" id="balCard">
+      <div class="balance-card-label">Your FundToken Balance</div>
+      <div class="balance-card-val" id="ftBalance">0.0100</div>
+      <div class="balance-card-sub">OVFT · rebasing ETH shares</div>
+    </div>
+  </div>
+
+    </div>
+
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    window.__timelines = window.__timelines || {};
+    window.__timelines["deposit"] = tl;
+
+    tl.to("#lbl", { opacity: 1, duration: 0.5 });
+    tl.to("#left", { opacity: 1, x: 0, duration: 0.9, ease: "power3.out" }, 0.5);
+    tl.to("#modal", { opacity: 1, y: 0, duration: 0.8, ease: "power3.out" }, 1.2);
+
+    // Simulate typing the amount
+    tl.add(() => {
+      let val = 0;
+      const ticker = setInterval(() => {
+        val = Math.min(val + 0.001, 0.01);
+        document.getElementById("amountDisplay").textContent = val.toFixed(4);
+        document.getElementById("receiveAmt").textContent = val.toFixed(4) + " OVFT";
+      }, 30);
+      setTimeout(() => clearInterval(ticker), 1200);
+    }, 4.5);
+
+    // Button click effect
+    tl.add(() => {
+      document.getElementById("btnDeposit").style.background = "#00cc6a";
+    }, 8.0);
+
+    // MetaMask pending state
+    tl.add(() => {
+      document.getElementById("btnDeposit").textContent = "Confirm in MetaMask…";
+      document.getElementById("btnDeposit").style.background = "rgba(0,255,136,0.2)";
+      document.getElementById("btnDeposit").style.color = "#00ff88";
+    }, 9.0);
+
+    // Confirmation
+    tl.to("#confirm", { opacity: 1, duration: 0.6, ease: "power2.out" }, 13.0);
+
+    // Balance card slides up
+    tl.to("#balCard", {
+      opacity: 1, y: -120, duration: 0.7, ease: "power3.out"
+    }, 14.5);
+
+    // Increment balance counter
+    tl.add(() => {
+      let val = 0;
+      const ticker = setInterval(() => {
+        val = Math.min(val + 0.0003, 0.0100);
+        document.getElementById("ftBalance").textContent = val.toFixed(4);
+      }, 16);
+      setTimeout(() => clearInterval(ticker), 800);
+    }, 15.0);
+  </script>
+</body>
+</html>

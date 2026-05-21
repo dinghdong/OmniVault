@@ -108,13 +108,33 @@ async function main() {
   await waitForDeploy(auditTrail, "AuditTrail");
   console.log('AuditTrail deployed to:', await auditTrail.getAddress());
 
+  // ── Chainlink Functions config per chain ──────────────────────────────────
+  // Router & DON ID differ by network. Subscription ID comes from env.
+  const CHAINLINK_CONFIG: Record<number, { router: string; donId: string }> = {
+    11155111: { // Ethereum Sepolia
+      router: '0xb83E47C2bC239B3bf370bc41e1459A34b41238D0',
+      donId:  '0x66756e2d657468657265756d2d7365706f6c69612d3100000000000000000000',
+    },
+    421614: { // Arbitrum Sepolia
+      router: '0x234a5fb5Bd614a7AA2d0a75328f427c5A2E68CF9',
+      donId:  '0x66756e2d617262697472756d2d7365706f6c69612d310000000000000000000000',
+    },
+  };
+  const clConfig = CHAINLINK_CONFIG[chainId] ?? {
+    router: process.env.FUNCTIONS_ROUTER || '0x0000000000000000000000000000000000000000',
+    donId:  ethers.id('omnivault-don'),
+  };
+  const clSubId = parseInt(process.env.CHAINLINK_SUBSCRIPTION_ID || '0', 10);
+
   // Deploy OmniOracle (Chainlink Functions client)
   console.log('\nDeploying OmniOracle...');
+  console.log('  Chainlink router:', clConfig.router);
+  console.log('  Subscription ID:', clSubId);
   const OmniOracle = await ethers.getContractFactory('OmniOracle');
   const omniOracle = await OmniOracle.deploy(
-    process.env.FUNCTIONS_ROUTER || '0x0000000000000000000000000000000000000000',
-    1234,
-    ethers.id('omnivault-don')
+    clConfig.router,
+    clSubId,
+    clConfig.donId
   );
   await waitForDeploy(omniOracle, "OmniOracle");
   console.log('OmniOracle deployed to:', await omniOracle.getAddress());

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { width: 1920px; height: 1080px; overflow: hidden; background: #08090d;
+           font-family: 'Inter', sans-serif; color: #f0f2f5; }
+    .bg {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 800px 600px at 50% 50%, rgba(167,139,250,0.05) 0%, transparent 70%);
+    }
+
+    .scene-label { position: absolute; top: 48px; left: 80px; font-size: 12px;
+      letter-spacing: 0.12em; color: #8b949e; font-family: 'IBM Plex Mono', monospace; opacity: 0; }
+
+    .layout { position: absolute; inset: 0; display: flex; align-items: center;
+               justify-content: center; gap: 80px; opacity: 0; }
+
+    /* Left: explanation */
+    .explain { width: 520px; }
+    .tag { display: inline-block; padding: 4px 12px; background: rgba(167,139,250,0.12);
+           border: 1px solid rgba(167,139,250,0.3); border-radius: 6px; color: #a78bfa;
+           font-size: 12px; font-family: 'IBM Plex Mono', monospace; margin-bottom: 20px; }
+    h2 { font-size: 52px; font-weight: 800; line-height: 1.1; margin-bottom: 18px; }
+    .grad-p { background: linear-gradient(135deg, #a78bfa, #7c3aed);
+              -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .desc { font-size: 17px; color: #8b949e; line-height: 1.7; margin-bottom: 32px; }
+
+    .lp-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 28px; }
+    .lp-chip {
+      display: flex; align-items: center; gap: 8px; padding: 8px 14px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 100px; font-size: 13px;
+    }
+    .lp-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    .flow-row { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
+    .flow-box { padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 600; }
+    .flow-arrow { color: #8b949e; font-size: 18px; }
+
+    /* Right: Countdown card */
+    .countdown-card {
+      width: 500px; background: #0d1117;
+      border: 1px solid rgba(167,139,250,0.3); border-radius: 20px;
+      padding: 40px; text-align: center;
+      box-shadow: 0 0 60px rgba(167,139,250,0.06);
+    }
+    .lock-icon { font-size: 48px; margin-bottom: 16px; }
+    .card-label { font-size: 13px; color: #8b949e; font-family: 'IBM Plex Mono', monospace;
+                  letter-spacing: 0.1em; margin-bottom: 24px; }
+    .timer-display {
+      font-size: 72px; font-weight: 800; color: #a78bfa;
+      font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.04em;
+      margin-bottom: 8px; line-height: 1;
+    }
+    .timer-label { font-size: 14px; color: #8b949e; margin-bottom: 32px; }
+
+    .veto-btn {
+      width: 100%; padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 700;
+      border: 1px solid rgba(248,113,113,0.4); background: rgba(248,113,113,0.06);
+      color: #f87171; cursor: pointer; margin-bottom: 12px;
+    }
+    .execute-btn {
+      width: 100%; padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 700;
+      border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04);
+      color: #8b949e; cursor: pointer;
+    }
+    .execute-btn.unlocked { border-color: rgba(0,255,136,0.4); background: rgba(0,255,136,0.06); color: #00ff88; }
+
+    .progress-bar { width: 100%; height: 4px; background: rgba(255,255,255,0.08);
+                    border-radius: 2px; margin-bottom: 32px; }
+    .progress-fill { height: 100%; border-radius: 2px;
+                     background: linear-gradient(90deg, #a78bfa, #7c3aed); }
+
+    /* Expired overlay */
+    .expired-overlay {
+      position: absolute; inset: 0; border-radius: 20px;
+      background: rgba(8,9,13,0.9);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; opacity: 0;
+    }
+    .expired-icon { font-size: 56px; }
+    .expired-title { font-size: 28px; font-weight: 700; color: #00ff88; }
+    .expired-sub { font-size: 15px; color: #8b949e; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="veto" data-start="0" data-duration="15" data-width="1920" data-height="1080">
+  <div class="bg"></div>
+  <div class="scene-label" id="lbl">SCENE 06 — COMMUNITY VETO WINDOW</div>
+
+  <div class="layout" id="layout">
+    <div class="explain">
+      <div class="tag">🔒 PendingExecution</div>
+      <h2>LP <span class="grad-p">Veto</span><br>Window</h2>
+      <p class="desc">
+        After AI consensus, LP holders get a 48-hour safety window.
+        Any LP can veto the investment — a human safety net over the AI's decision.
+        If the community stays silent, execution unlocks automatically.
+      </p>
+      <div class="lp-row">
+        <div class="lp-chip"><div class="lp-dot" style="background:#00ff88"></div>LP #1 · 0.12 ETH</div>
+        <div class="lp-chip"><div class="lp-dot" style="background:#63b3ed"></div>LP #2 · 0.08 ETH</div>
+        <div class="lp-chip"><div class="lp-dot" style="background:#a78bfa"></div>LP #3 · 0.05 ETH</div>
+        <div class="lp-chip"><div class="lp-dot" style="background:#facc15"></div>+12 more LPs</div>
+      </div>
+      <div class="flow-row">
+        <div class="flow-box" style="background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.3);color:#a78bfa">PendingExecution</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box" style="background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.3);color:#f87171">Vetoed</div>
+        <div class="flow-arrow">or</div>
+        <div class="flow-box" style="background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3);color:#00ff88">Active ✓</div>
+      </div>
+    </div>
+
+    <div class="countdown-card" style="position:relative">
+      <div class="lock-icon">🔒</div>
+      <div class="card-label">EXECUTION TIMELOCK</div>
+      <div class="timer-display" id="timer">47:59:42</div>
+      <div class="timer-label">remaining in veto window</div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progFill" style="width:0%"></div>
+      </div>
+      <button class="veto-btn">⚠ Veto Investment</button>
+      <button class="execute-btn" id="execBtn">⚡ Execute Investment (locked)</button>
+
+      <div class="expired-overlay" id="expired">
+        <div class="expired-icon">✅</div>
+        <div class="expired-title">Timelock Expired</div>
+        <div class="expired-sub">No veto — investment ready to execute</div>
+      </div>
+    </div>
+  </div>
+
+    </div>
+
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    window.__timelines = window.__timelines || {};
+    window.__timelines["veto"] = tl;
+
+    tl.to("#lbl", { opacity: 1, duration: 0.5 });
+    tl.to("#layout", { opacity: 1, duration: 0.8, ease: "power3.out" }, 0.5);
+
+    // Animate countdown (accelerated for demo: count down to 0)
+    tl.add(() => {
+      let seconds = 47 * 3600 + 59 * 60 + 42;
+      const el = document.getElementById("timer");
+      const prog = document.getElementById("progFill");
+      const total = 48 * 3600;
+      const iv = setInterval(() => {
+        seconds = Math.max(0, seconds - 200);
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        el.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        prog.style.width = `${((total - seconds) / total * 100)}%`;
+        if (seconds === 0) clearInterval(iv);
+      }, 50);
+    }, 3.0);
+
+    // Timer hits 00:00:00
+    tl.add(() => {
+      document.getElementById("timer").textContent = "00:00:00";
+      document.getElementById("timer").style.color = "#00ff88";
+      document.getElementById("progFill").style.width = "100%";
+      document.getElementById("progFill").style.background = "#00ff88";
+    }, 9.5);
+
+    // Show expired overlay
+    tl.to("#expired", { opacity: 1, duration: 0.7, ease: "power2.out" }, 10.5);
+
+    // Execute button unlocks
+    tl.add(() => {
+      document.getElementById("execBtn").className = "execute-btn unlocked";
+      document.getElementById("execBtn").textContent = "⚡ Execute Investment";
+    }, 11.0);
+  </script>
+</body>
+</html>

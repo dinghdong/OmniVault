@@ -1,0 +1,12 @@
+{
+  "name": "omnivault-demo",
+  "version": "1.0.0",
+  "scripts": {
+    "render": "bash render.sh",
+    "preview": "npx @heygen/hyperframes preview",
+    "render:scene": "npx @heygen/hyperframes render"
+  },
+  "devDependencies": {
+    "@hyperframes/core": "latest"
+  }
+}

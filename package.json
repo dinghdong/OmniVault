@@ -17,6 +17,7 @@
     "frontend:dev": "vite --port=3001 --host=0.0.0.0"
   },
   "dependencies": {
+    "@chainlink/functions-toolkit": "^0.3.2",
     "@google/genai": "^1.29.0",
     "@tailwindcss/vite": "^4.1.14",
     "@tanstack/react-query": "^5.0.0",

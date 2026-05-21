@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { width: 1920px; height: 1080px; overflow: hidden; background: #08090d;
+           font-family: 'Inter', sans-serif; color: #f0f2f5; }
+    .bg {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 900px 600px at 50% 50%, rgba(0,255,136,0.04) 0%, transparent 70%);
+    }
+
+    .scene-label { position: absolute; top: 48px; left: 80px; font-size: 12px;
+      letter-spacing: 0.12em; color: #8b949e; font-family: 'IBM Plex Mono', monospace; opacity: 0; }
+
+    /* Center layout */
+    .center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+               width: 1100px; text-align: center; opacity: 0; }
+
+    .icon-shield {
+      width: 100px; height: 100px; border-radius: 50%; margin: 0 auto 32px;
+      background: rgba(0,255,136,0.1); border: 2px solid rgba(0,255,136,0.4);
+      display: flex; align-items: center; justify-content: center; font-size: 44px;
+    }
+    h2 { font-size: 56px; font-weight: 800; margin-bottom: 14px; }
+    .grad { background: linear-gradient(135deg, #00ff88, #00cc6a);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .sub { font-size: 18px; color: #8b949e; margin-bottom: 56px; line-height: 1.6; }
+
+    /* Hash card */
+    .hash-card {
+      background: #0d1117; border: 1px solid rgba(0,255,136,0.25); border-radius: 20px;
+      padding: 40px 48px; margin-bottom: 32px;
+      box-shadow: 0 0 80px rgba(0,255,136,0.06);
+    }
+    .hash-label { font-size: 12px; color: #8b949e; letter-spacing: 0.1em;
+                  font-family: 'IBM Plex Mono', monospace; margin-bottom: 16px; text-align: left; }
+    .hash-value {
+      font-size: 22px; font-family: 'IBM Plex Mono', monospace; color: #00ff88;
+      word-break: break-all; text-align: left; letter-spacing: 0.02em;
+      min-height: 56px;
+    }
+    .hash-meta {
+      display: flex; gap: 24px; margin-top: 24px; padding-top: 24px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .hash-meta-item { text-align: left; }
+    .hash-meta-label { font-size: 11px; color: #484f58; font-family: 'IBM Plex Mono', monospace; }
+    .hash-meta-val { font-size: 13px; color: #8b949e; margin-top: 4px; }
+
+    /* Proof steps */
+    .proof-steps { display: flex; gap: 16px; justify-content: center; }
+    .proof-step {
+      flex: 1; padding: 20px 24px;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 14px; text-align: left; opacity: 0;
+    }
+    .proof-step-num {
+      width: 28px; height: 28px; border-radius: 50%; background: rgba(0,255,136,0.15);
+      border: 1px solid rgba(0,255,136,0.4); color: #00ff88;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; margin-bottom: 12px;
+    }
+    .proof-step-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+    .proof-step-sub { font-size: 12px; color: #8b949e; line-height: 1.5; }
+
+    /* Verification badge */
+    .verify-badge {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 10px 20px; border-radius: 100px;
+      background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.35);
+      color: #00ff88; font-size: 14px; font-weight: 600;
+      opacity: 0; margin-top: 28px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="proof" data-start="0" data-duration="15" data-width="1920" data-height="1080">
+  <div class="bg"></div>
+  <div class="scene-label" id="lbl">SCENE 05 — 0G STORAGE PROOF</div>
+
+  <div class="center" id="center">
+    <div class="icon-shield">🔐</div>
+    <h2>Audit <span class="grad">Fingerprint</span> On-Chain</h2>
+    <p class="sub">
+      SHA-256 of the full 3-round 0G Compute inference log committed immutably.
+      Anyone can recompute from the raw log to verify — the hash cannot be forged.
+    </p>
+
+    <div class="hash-card">
+      <div class="hash-label">AUDIT CONTENT HASH · SHA-256 · Project #3</div>
+      <div class="hash-value" id="hashVal"></div>
+      <div class="hash-meta">
+        <div class="hash-meta-item">
+          <div class="hash-meta-label">ALGORITHM</div>
+          <div class="hash-meta-val">SHA-256</div>
+        </div>
+        <div class="hash-meta-item">
+          <div class="hash-meta-label">COMMITTED AT</div>
+          <div class="hash-meta-val">Block #7,291,041</div>
+        </div>
+        <div class="hash-meta-item">
+          <div class="hash-meta-label">STORED IN</div>
+          <div class="hash-meta-val">InvestmentManager.projects[3]</div>
+        </div>
+        <div class="hash-meta-item">
+          <div class="hash-meta-label">NETWORK</div>
+          <div class="hash-meta-val">Ethereum Sepolia</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="proof-steps">
+      <div class="proof-step" id="ps1">
+        <div class="proof-step-num">1</div>
+        <div class="proof-step-title">0G Compute runs</div>
+        <div class="proof-step-sub">qwen-2.5-7b inference via Chainlink DON — fully verifiable</div>
+      </div>
+      <div class="proof-step" id="ps2">
+        <div class="proof-step-num">2</div>
+        <div class="proof-step-title">Audit log hashed</div>
+        <div class="proof-step-sub">Full JSON response → SHA-256 computed inside DON</div>
+      </div>
+      <div class="proof-step" id="ps3">
+        <div class="proof-step-num">3</div>
+        <div class="proof-step-title">Hash stored on-chain</div>
+        <div class="proof-step-sub">Committed to InvestmentManager via fulfillRequest callback</div>
+      </div>
+      <div class="proof-step" id="ps4">
+        <div class="proof-step-num">4</div>
+        <div class="proof-step-title">Anyone can verify</div>
+        <div class="proof-step-sub">Recompute hash from raw log — mismatch = tampered result</div>
+      </div>
+    </div>
+
+    <div class="verify-badge" id="badge">
+      <span>✓</span>
+      <span>Tamper-proof · Permanently on-chain · Independently verifiable</span>
+    </div>
+  </div>
+
+    </div>
+
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    window.__timelines = window.__timelines || {};
+    window.__timelines["proof"] = tl;
+    const HASH = "0x9d2a4f8e1c3b7a6d5e2f9c4b8a3e7f1d6c2b9e4a7f3c8b1e5d2a6f4c9b7e3a";
+
+    tl.to("#lbl", { opacity: 1, duration: 0.5 });
+    tl.to("#center", { opacity: 1, duration: 0.8, ease: "power3.out" }, 0.5);
+
+    // Type out hash character by character
+    tl.add(() => {
+      let i = 0;
+      const iv = setInterval(() => {
+        document.getElementById("hashVal").textContent = HASH.slice(0, i++);
+        if (i > HASH.length) clearInterval(iv);
+      }, 35);
+    }, 2.0);
+
+    // Proof steps appear
+    tl.to("#ps1", { opacity: 1, y: -8, duration: 0.5, ease: "power2.out" }, 6.0);
+    tl.to("#ps2", { opacity: 1, y: -8, duration: 0.5, ease: "power2.out" }, 6.4);
+    tl.to("#ps3", { opacity: 1, y: -8, duration: 0.5, ease: "power2.out" }, 6.8);
+    tl.to("#ps4", { opacity: 1, y: -8, duration: 0.5, ease: "power2.out" }, 7.2);
+
+    // Badge
+    tl.to("#badge", { opacity: 1, duration: 0.6, ease: "power2.out" }, 10.0);
+  </script>
+</body>
+</html>

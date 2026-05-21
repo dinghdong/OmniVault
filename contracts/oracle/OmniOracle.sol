@@ -4,71 +4,85 @@ pragma solidity ^0.8.24;
 import {FunctionsClient} from "@chainlink/contracts/src/v0.8/functions/v1_3_0/FunctionsClient.sol";
 import {FunctionsRequest} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/libraries/FunctionsRequest.sol";
 import {ConfirmedOwner} from "@chainlink/contracts/src/v0.8/shared/access/ConfirmedOwner.sol";
-import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
 /// @title OmniOracle — Chainlink Functions client for AI-powered project audits
-/// @notice Receives audit requests, queries AI agents via Chainlink Functions,
-///         and stores the returned audit scores for InvestmentManager to consume.
-contract OmniOracle is FunctionsClient, ConfirmedOwner, AccessControl {
+/// @notice Requests AI audits via Chainlink DON (which calls 0G Compute Network),
+///         then forwards the result to InvestmentManager.
+///
+/// Trust model:
+///   • JS source stored on-chain (updatable by owner), executed by Chainlink DON.
+///   • DON uses DON-hosted Secrets for the 0G Compute API key — never exposed on-chain.
+///   • 0G Compute runs inference inside a TeeML enclave (Intel TDX) on Mainnet.
+///   • Result: (finalScore uint256, contentHash bytes32) encoded as 64 bytes.
+contract OmniOracle is FunctionsClient, ConfirmedOwner {
     using FunctionsRequest for FunctionsRequest.Request;
 
-    // ─── Roles ─────────────────────────────────────────────────────────────────
-    bytes32 public constant AUDIT_EXECUTOR_ROLE = keccak256("AUDIT_EXECUTOR_ROLE");
+    // ─── Errors ────────────────────────────────────────────────────────────────
+    error EmptyDonId();
+    error EmptySource();
+    error RequestNotFound(bytes32 requestId);
+    error AuditAlreadyPending(uint256 projectId);
+    error NotAuthorized();
 
     // ─── Events ────────────────────────────────────────────────────────────────
-    event AuditRequestSent(
+    event AuditRequested(
         uint256 indexed projectId,
         bytes32 indexed requestId,
-        string sourceCodeHash,
-        string bizApiEndpoint
+        string  sourceCodeHash
     );
-    event AuditResultReceived(
+    event AuditFulfilled(
         uint256 indexed projectId,
         bytes32 indexed requestId,
         uint256 score,
-        uint256 scoreLow,
-        uint256 scoreHigh,
-        bytes32 reportHash
+        bytes32 contentHash
+    );
+    event AuditReport(
+        uint256 indexed projectId,
+        string  summary          // compact JSON: scores, recommendation, rationale, findings
     );
     event AuditFailed(
         uint256 indexed projectId,
         bytes32 indexed requestId,
-        string reason
+        string  reason
     );
 
     // ─── State ─────────────────────────────────────────────────────────────────
-    // Subscription ID for Chainlink Functions
-    uint64 public s_subscriptionId;
+    uint64  public s_subscriptionId;
+    bytes32 internal s_donId;
+    uint32  public s_callbackGasLimit = 300_000;
 
-    // Map requestId → projectId
+    /// @notice The Chainlink Functions JS source (stored on-chain, updatable).
+    ///         Set via setAuditSource() after deployment, or in the deploy script.
+    string  public s_auditSource;
+
+    /// @notice Secrets version slot (DON-hosted secrets slot ID).
+    uint8   public s_secretsSlotId;
+    uint64  public s_secretsVersion;
+
+    /// @notice The InvestmentManager contract that can request audits and
+    ///         receives fulfillment callbacks.
+    address public investmentManager;
+
+    /// Maps Chainlink requestId → projectId
     mapping(bytes32 => uint256) public s_requestToProject;
 
-    // Map projectId → latest audit result
-    mapping(uint256 => AuditResult) public s_auditResults;
+    /// Maps projectId → pending requestId (zero = no pending request)
+    mapping(uint256 => bytes32) public s_pendingRequest;
 
-    // ─── Audit Result Struct ────────────────────────────────────────────────────
-    struct AuditResult {
-        uint256 score;
-        uint256 scoreLow;
-        uint256 scoreHigh;
-        bytes32 reportHash;
-        bool exists;
-    }
+    /// Maps projectId → fulfilled score+1  (0 = not yet fulfilled, max = failed)
+    /// score is stored as score+1 so that a score of 0 is distinguishable from unfulfilled.
+    mapping(uint256 => uint256) public fulfilledScore;
 
-    // ─── Errors ─────────────────────────────────────────────────────────────────
-    error EmptySourceCodeHash();
-    error EmptyBizApi();
-    error RequestNotFound(bytes32 requestId);
-    error AuditAlreadyExists(uint256 projectId);
-    error EmptyDonId();
+    /// Maps projectId → content hash (SHA-256 of full audit log)
+    mapping(uint256 => bytes32) public fulfilledHash;
 
-    /// @notice Constructor
-    /// @param functionsRouter Chainlink Functions Router address
-    /// @param subscriptionId Chainlink subscription ID for billing
-    /// @param donId DON identifier for the executable
+    // ─── Constructor ────────────────────────────────────────────────────────────
+    /// @param functionsRouter Chainlink Functions Router address (Sepolia: 0xb83E47C2bC239B3bf370bc41e1459A34b41238D0)
+    /// @param subscriptionId  Chainlink subscription ID (created at functions.chain.link)
+    /// @param donId           DON identifier bytes32 (Sepolia: formatBytes32String("fun-ethereum-sepolia-1"))
     constructor(
         address functionsRouter,
-        uint64 subscriptionId,
+        uint64  subscriptionId,
         bytes32 donId
     )
         ConfirmedOwner(msg.sender)
@@ -76,156 +90,149 @@ contract OmniOracle is FunctionsClient, ConfirmedOwner, AccessControl {
     {
         if (donId == bytes32(0)) revert EmptyDonId();
         s_subscriptionId = subscriptionId;
-        s_donId = donId;
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        s_donId          = donId;
     }
 
-    bytes32 internal s_donId;
+    // ─── Admin ──────────────────────────────────────────────────────────────────
 
-    // ─── External Functions ─────────────────────────────────────────────────────
-
-    /// @notice Update the subscription ID
-    function setSubscriptionId(uint64 newSubscriptionId) external onlyOwner {
-        s_subscriptionId = newSubscriptionId;
+    function setInvestmentManager(address _im) external onlyOwner {
+        investmentManager = _im;
     }
 
-    /// @notice Get current DON ID
-    function getDonId() external view returns (bytes32) {
-        return s_donId;
+    function setSubscriptionId(uint64 newSubId) external onlyOwner {
+        s_subscriptionId = newSubId;
     }
 
-    /// @notice Request a new AI audit for a project
-    /// @param projectId Project ID in InvestmentManager
-    /// @param sourceCodeHash IPFS/CID hash of the source code to audit
-    /// @param bizApi Business API endpoint URL for additional data
-    /// @return requestId The Chainlink request ID
-    function requestAudit(
-        uint256 projectId,
-        string calldata sourceCodeHash,
-        string calldata bizApi
-    ) external onlyRole(AUDIT_EXECUTOR_ROLE) returns (bytes32 requestId) {
-        if (bytes(sourceCodeHash).length == 0) revert EmptySourceCodeHash();
-        if (bytes(bizApi).length == 0) revert EmptyBizApi();
-        if (s_auditResults[projectId].exists) revert AuditAlreadyExists(projectId);
-
-        // Build the JavaScript source for the audit
-        string memory javaScriptSource = _buildAuditScript();
-
-        // Initialize the request
-        FunctionsRequest.Request memory req;
-        req.initializeRequestForInlineJavaScript(javaScriptSource);
-
-        // Set args
-        string[] memory args = new string[](3);
-        args[0] = sourceCodeHash;
-        args[1] = bizApi;
-        args[2] = _toString(projectId);
-        req.setArgs(args);
-
-        // Send request with subscription billing
-        requestId = _sendRequest(
-            req.encodeCBOR(),
-            s_subscriptionId,
-            300000, // callback gas limit
-            s_donId
-        );
-
-        s_requestToProject[requestId] = projectId;
-        emit AuditRequestSent(projectId, requestId, sourceCodeHash, bizApi);
-    }
-
-    /// @notice Callback invoked by Chainlink DON with audit results
-    function _fulfillRequest(
-        bytes32 requestId,
-        bytes memory response,
-        bytes memory err
-    ) internal override {
-        uint256 projectId = s_requestToProject[requestId];
-        if (projectId == 0) revert RequestNotFound(requestId);
-
-        if (err.length > 0) {
-            emit AuditFailed(projectId, requestId, string(err));
-            return;
-        }
-
-        // Parse response: abi.encode(score, scoreLow, scoreHigh, reportHash)
-        if (response.length < 128) {
-            emit AuditFailed(projectId, requestId, "Response too short");
-            return;
-        }
-
-        (uint256 score, uint256 scoreLow, uint256 scoreHigh, bytes32 reportHash) =
-            abi.decode(response, (uint256, uint256, uint256, bytes32));
-
-        s_auditResults[projectId] = AuditResult({
-            score: score,
-            scoreLow: scoreLow,
-            scoreHigh: scoreHigh,
-            reportHash: reportHash,
-            exists: true
-        });
-
-        emit AuditResultReceived(projectId, requestId, score, scoreLow, scoreHigh, reportHash);
-    }
-
-    /// @notice Get the latest audit result for a project
-    function getAuditResult(uint256 projectId)
-        external
-        view
-        returns (AuditResult memory result)
-    {
-        return s_auditResults[projectId];
-    }
-
-    /// @notice Update the DON ID (for upgrades)
     function setDonId(bytes32 newDonId) external onlyOwner {
         if (newDonId == bytes32(0)) revert EmptyDonId();
         s_donId = newDonId;
     }
 
-    // ─── Internal Helpers ────────────────────────────────────────────────────────
-
-    /// @dev Builds the inline JavaScript audit script
-    function _buildAuditScript() internal pure returns (string memory) {
-        return
-            "const sourceCodeHash = args[0];"
-            "const bizApi = args[1];"
-            "const projectId = parseInt(args[2]);"
-            ""
-            "// Make HTTP request to AI audit service"
-            "const auditResponse = await Functions.makeHttpRequest({"
-            "  url: `https://api.omnivault.ai/v1/audit/${projectId}`,"
-            "  method: 'POST',"
-            "  headers: { 'Content-Type': 'application/json' },"
-            "  body: JSON.stringify({ sourceCodeHash, bizApi }),"
-            "  timeout: 60000"
-            "});"
-            ""
-            "const result = auditResponse.data;"
-            "if (!result) throw new Error('No audit data received');"
-            ""
-            "const responseBytes = Functions.encodeUint256(result.score)"
-            "  .concat(Functions.encodeUint256(result.scoreLow))"
-            "  .concat(Functions.encodeUint256(result.scoreHigh))"
-            "  .concat(Functions.encodeBytes32(result.reportHash || '0x00'));"
-            "return Functions.encodeBytes(responseBytes);";
+    function setCallbackGasLimit(uint32 gasLimit) external onlyOwner {
+        s_callbackGasLimit = gasLimit;
     }
 
-    /// @dev Simple uint256 to string conversion
-    function _toString(uint256 value) internal pure returns (string memory) {
+    function setSecretsConfig(uint8 slotId, uint64 version) external onlyOwner {
+        s_secretsSlotId   = slotId;
+        s_secretsVersion  = version;
+    }
+
+    /// @notice Upload (or update) the Chainlink Functions JS source on-chain.
+    ///         In production, run: npx ts-node scripts/upload-source.ts
+    ///         For deploy scripts: call this with fs.readFileSync("chainlink/audit-source.js")
+    function setAuditSource(string calldata source) external onlyOwner {
+        if (bytes(source).length == 0) revert EmptySource();
+        s_auditSource = source;
+    }
+
+    function getDonId() external view returns (bytes32) {
+        return s_donId;
+    }
+
+    // ─── Request Audit ──────────────────────────────────────────────────────────
+
+    /// @notice Request an AI audit for a project via Chainlink Functions.
+    ///         Callable only by the linked InvestmentManager.
+    /// @param projectId       Project ID in InvestmentManager
+    /// @param sourceCodeHash  Hex string of the project's commit hash (keccak256 of pitch/code)
+    /// @param bizApi          Business context URL / description passed as prompt context
+    /// @return requestId      Chainlink Functions request ID
+    function requestAudit(
+        uint256 projectId,
+        string  calldata sourceCodeHash,
+        string  calldata bizApi
+    ) external returns (bytes32 requestId) {
+        if (msg.sender != investmentManager) revert NotAuthorized();
+        if (bytes(s_auditSource).length == 0) revert EmptySource();
+        if (s_pendingRequest[projectId] != bytes32(0)) revert AuditAlreadyPending(projectId);
+
+        // Build the Chainlink Functions request
+        FunctionsRequest.Request memory req;
+        req.initializeRequestForInlineJavaScript(s_auditSource);
+
+        // Pass project data as args (available as `args[]` in the JS source)
+        string[] memory fArgs = new string[](3);
+        fArgs[0] = _uint256ToString(projectId);
+        fArgs[1] = sourceCodeHash;
+        fArgs[2] = bizApi;
+        req.setArgs(fArgs);
+
+        // Attach DON-hosted secrets (ZG_API_KEY + ZG_BASE_URL)
+        if (s_secretsVersion > 0) {
+            req.addDONHostedSecrets(s_secretsSlotId, s_secretsVersion);
+        }
+
+        // Send request — Chainlink bills to the subscription
+        requestId = _sendRequest(
+            req.encodeCBOR(),
+            s_subscriptionId,
+            s_callbackGasLimit,
+            s_donId
+        );
+
+        s_requestToProject[requestId]  = projectId;
+        s_pendingRequest[projectId]    = requestId;
+
+        emit AuditRequested(projectId, requestId, sourceCodeHash);
+    }
+
+    // ─── Chainlink Callback ─────────────────────────────────────────────────────
+
+    /// @notice Called by Chainlink DON after JS execution completes.
+    ///         Stores score+contentHash in mappings; NO external call to InvestmentManager.
+    ///         InvestmentManager.settleAudit(projectId) is called separately (permissionless).
+    ///
+    ///         Gas budget (90 000):
+    ///           ~69 000 used here (2 cold SSTOREs + events + summary loop)
+    ///           ~21 000 remaining — no 63/64 sub-call risk.
+    function _fulfillRequest(
+        bytes32 requestId,
+        bytes   memory response,
+        bytes   memory err
+    ) internal override {
+        uint256 projectId = s_requestToProject[requestId];
+        if (projectId == 0) return; // unknown requestId — silent return, never revert
+
+        delete s_pendingRequest[projectId];
+
+        // ── Error path ──────────────────────────────────────────────────────
+        if (err.length > 0 || response.length < 32) {
+            fulfilledScore[projectId] = type(uint256).max; // sentinel: failed
+            emit AuditFailed(projectId, requestId, err.length > 0 ? string(err) : "short");
+            return;
+        }
+
+        // ── Success path ─────────────────────────────────────────────────────
+        // Read score from first 32 bytes via assembly (no ABI overhead, no bounds check cost)
+        uint256 score;
+        assembly { score := mload(add(response, 32)) }
+        if (score > 100) score = 100;
+
+        fulfilledScore[projectId] = score + 1; // +1: score=0 ≠ unfulfilled=0
+
+        // Store content hash if response is long enough (bytes 32-63)
+        if (response.length >= 64) {
+            bytes32 contentHash;
+            assembly { contentHash := mload(add(response, 64)) }
+            fulfilledHash[projectId] = contentHash;
+            emit AuditFulfilled(projectId, requestId, score, contentHash);
+        }
+        // No byte-copy loop, no AuditReport event — keeps callback under 60K gas
+    }
+
+    // ─── Helpers ────────────────────────────────────────────────────────────────
+
+    function _uint256ToString(uint256 value) internal pure returns (string memory) {
         if (value == 0) return "0";
         uint256 temp = value;
         uint256 digits;
-        while (temp != 0) {
-            digits++;
-            temp /= 10;
-        }
-        bytes memory buffer = new bytes(digits);
+        while (temp != 0) { digits++; temp /= 10; }
+        bytes memory buf = new bytes(digits);
         while (value != 0) {
-            digits -= 1;
-            buffer[digits] = bytes1(uint8(48 + (value % 10)));
+            digits--;
+            buf[digits] = bytes1(uint8(48 + (value % 10)));
             value /= 10;
         }
-        return string(buffer);
+        return string(buf);
     }
 }

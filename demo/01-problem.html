@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta data-duration="25000" data-fps="30" />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 1920px; height: 1080px; overflow: hidden;
+      background: #08090d;
+      font-family: 'Inter', system-ui, sans-serif;
+      color: #f0f2f5;
+    }
+
+    /* Animated mesh background */
+    .bg-mesh {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 900px 600px at 20% 50%, rgba(0,255,136,0.04) 0%, transparent 70%),
+        radial-gradient(ellipse 700px 500px at 80% 20%, rgba(167,139,250,0.03) 0%, transparent 70%),
+        radial-gradient(ellipse 500px 400px at 60% 80%, rgba(99,179,237,0.03) 0%, transparent 70%);
+    }
+
+    /* Grid lines */
+    .bg-grid {
+      position: absolute; inset: 0; opacity: 0.04;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px);
+      background-size: 80px 80px;
+    }
+
+    /* Nav bar */
+    .nav {
+      position: absolute; top: 0; left: 0; right: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 24px 80px;
+      background: rgba(8,9,13,0.8);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      opacity: 0;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 12px;
+      font-weight: 700; font-size: 20px;
+    }
+    .logo-icon {
+      width: 36px; height: 36px; background: #00ff88; border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .nav-links { display: flex; gap: 32px; color: #8b949e; font-size: 14px; }
+    .nav-badge {
+      padding: 6px 16px; border: 1px solid rgba(0,255,136,0.35); border-radius: 100px;
+      color: #00ff88; font-size: 13px; font-family: 'IBM Plex Mono', monospace;
+    }
+
+    /* Main content */
+    .content {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      text-align: center; width: 1100px;
+    }
+
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 16px;
+      background: rgba(0,255,136,0.08); border: 1px solid rgba(0,255,136,0.2); border-radius: 100px;
+      color: #00ff88; font-size: 13px; font-family: 'IBM Plex Mono', monospace;
+      margin-bottom: 32px; opacity: 0;
+    }
+    .eyebrow-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: #00ff88;
+      animation: blink 1.5s infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    h1 {
+      font-size: 88px; font-weight: 800; line-height: 1.05; margin-bottom: 32px;
+      opacity: 0;
+    }
+    .grad { background: linear-gradient(135deg, #00ff88 0%, #00cc6a 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+    .subtitle {
+      font-size: 22px; color: #8b949e; line-height: 1.6; max-width: 720px; margin: 0 auto 56px;
+      opacity: 0;
+    }
+
+    /* Stats row */
+    .stats { display: flex; gap: 24px; justify-content: center; opacity: 0; }
+    .stat {
+      padding: 28px 40px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 16px; text-align: center;
+      min-width: 220px;
+    }
+    .stat-val { font-size: 40px; font-weight: 700; color: #00ff88; font-family: 'IBM Plex Mono', monospace; }
+    .stat-label { font-size: 13px; color: #8b949e; margin-top: 6px; }
+
+    /* Problem cards (left side - old world) */
+    .problem-col {
+      position: absolute; left: 80px; top: 50%; transform: translateY(-50%);
+      display: flex; flex-direction: column; gap: 16px; opacity: 0;
+    }
+    .problem-card {
+      width: 340px; padding: 20px 24px;
+      background: rgba(248,113,113,0.06);
+      border: 1px solid rgba(248,113,113,0.2); border-radius: 12px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .problem-icon { font-size: 24px; flex-shrink: 0; }
+    .problem-text { font-size: 15px; color: #f0f2f5; }
+    .problem-sub { font-size: 12px; color: #8b949e; margin-top: 4px; }
+
+    /* Solution cards (right side - new world) */
+    .solution-col {
+      position: absolute; right: 80px; top: 50%; transform: translateY(-50%);
+      display: flex; flex-direction: column; gap: 16px; opacity: 0;
+    }
+    .solution-card {
+      width: 340px; padding: 20px 24px;
+      background: rgba(0,255,136,0.04);
+      border: 1px solid rgba(0,255,136,0.2); border-radius: 12px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .solution-icon { font-size: 24px; flex-shrink: 0; }
+
+    .arrow-divider {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      font-size: 48px; opacity: 0; color: #8b949e;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-mesh"></div>
+  <div class="bg-grid"></div>
+
+  <nav class="nav" id="nav">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M4 10L10 4L16 10L10 16L4 10Z" stroke="#08090d" stroke-width="2" fill="none"/>
+          <circle cx="10" cy="10" r="3" fill="#08090d"/>
+        </svg>
+      </div>
+      OmniVault
+    </div>
+    <div class="nav-links">
+      <span>Features</span><span>Pipeline</span><span>Portfolio</span><span>Apply</span>
+    </div>
+    <div class="nav-badge">⬡ AI-Powered · Built on 0G</div>
+  </nav>
+
+  <!-- Phase 1: Problem Statement -->
+  <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;" id="phase1">
+    <div class="content">
+      <div class="eyebrow" id="eyebrow">
+        <span class="eyebrow-dot"></span>
+        AI-Powered Decentralized VC · Built on 0G
+      </div>
+      <h1 id="h1">The Future of<br><span class="grad">Web3 Investment</span></h1>
+      <p class="subtitle" id="sub">
+        Traditional VC is opaque, gatekept, and slow.<br>
+        Web3 deserves a fund that is transparent, autonomous, and always on.
+      </p>
+    </div>
+  </div>
+
+  <!-- Phase 2: Problem vs Solution -->
+  <div class="problem-col" id="problems">
+    <div style="font-size:13px;color:#f87171;font-family:'IBM Plex Mono',monospace;margin-bottom:8px;letter-spacing:0.08em;">OLD WORLD</div>
+    <div class="problem-card">
+      <div class="problem-icon">🚪</div>
+      <div><div class="problem-text">Gatekept Access</div><div class="problem-sub">Only connected founders get funded</div></div>
+    </div>
+    <div class="problem-card">
+      <div class="problem-icon">🕒</div>
+      <div><div class="problem-text">Months-Long Due Diligence</div><div class="problem-sub">Manual audits, opaque decisions</div></div>
+    </div>
+    <div class="problem-card">
+      <div class="problem-icon">💤</div>
+      <div><div class="problem-text">Idle Capital</div><div class="problem-sub">LP funds sit uninvested while waiting</div></div>
+    </div>
+    <div class="problem-card">
+      <div class="problem-icon">🙈</div>
+      <div><div class="problem-text">No Accountability</div><div class="problem-sub">Reasoning is never disclosed</div></div>
+    </div>
+  </div>
+
+  <div class="arrow-divider" id="arrow">→</div>
+
+  <div class="solution-col" id="solutions">
+    <div style="font-size:13px;color:#00ff88;font-family:'IBM Plex Mono',monospace;margin-bottom:8px;letter-spacing:0.08em;">OMNIVAULT</div>
+    <div class="solution-card">
+      <div class="solution-icon">🤖</div>
+      <div><div class="problem-text">AI Agents Audit 24/7</div><div class="problem-sub">Chainlink × 0G Compute verifiable inference</div></div>
+    </div>
+    <div class="solution-card">
+      <div class="solution-icon">⚡</div>
+      <div><div class="problem-text">Minutes, Not Months</div><div class="problem-sub">Chainlink DON processes in &lt;60 seconds</div></div>
+    </div>
+    <div class="solution-card">
+      <div class="solution-icon">📈</div>
+      <div><div class="problem-text">Yield While You Wait</div><div class="problem-sub">LP deposits earn AAVE V3 yield continuously</div></div>
+    </div>
+    <div class="solution-card">
+      <div class="solution-icon">🔍</div>
+      <div><div class="problem-text">Every Audit On-Chain</div><div class="problem-sub">SHA-256 proof on 0G Storage — tamper-proof</div></div>
+    </div>
+  </div>
+
+  <script>
+    const tl = gsap.timeline();
+
+    // 0-1s: Nav slides in
+    tl.to("#nav", { opacity: 1, duration: 0.6, ease: "power2.out" });
+
+    // 1-3s: Eyebrow badge
+    tl.to("#eyebrow", { opacity: 1, y: -8, duration: 0.7, ease: "power3.out" }, 1.0);
+
+    // 2-4s: Headline
+    tl.to("#h1", { opacity: 1, y: -12, duration: 0.9, ease: "power3.out" }, 2.0);
+
+    // 3-5s: Subtitle
+    tl.to("#sub", { opacity: 1, y: -8, duration: 0.8, ease: "power3.out" }, 3.2);
+
+    // 6s: Fade out center content, reveal comparison
+    tl.to("#phase1", { opacity: 0, duration: 0.8, ease: "power2.in" }, 8.5);
+
+    // 9s: Problems appear staggered
+    tl.to("#problems", { opacity: 1, x: 0, duration: 0.6, ease: "power3.out" }, 9.0);
+
+    // 10s: Arrow
+    tl.to("#arrow", { opacity: 0.5, duration: 0.4 }, 10.2);
+
+    // 10.5s: Solutions appear staggered
+    tl.to("#solutions", { opacity: 1, x: 0, duration: 0.6, ease: "power3.out" }, 10.5);
+
+    // Hold to end
+  </script>
+</body>
+</html>

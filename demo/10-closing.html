@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta data-duration="10000" data-fps="30" />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { width: 1920px; height: 1080px; overflow: hidden; background: #08090d;
+           font-family: 'Inter', sans-serif; color: #f0f2f5;
+           display: flex; align-items: center; justify-content: center; }
+
+    /* Animated radial burst */
+    .burst {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: 1200px; height: 1200px; border-radius: 50%;
+      background: radial-gradient(ellipse at center, rgba(0,255,136,0.08) 0%, rgba(0,255,136,0.02) 40%, transparent 70%);
+      scale: 0;
+    }
+
+    /* Orbiting rings */
+    .ring {
+      position: absolute; left: 50%; top: 50%; border-radius: 50%;
+      border: 1px solid rgba(0,255,136,0.08); transform: translate(-50%, -50%);
+      opacity: 0;
+    }
+
+    .center { text-align: center; position: relative; z-index: 10; opacity: 0; }
+
+    .logo-mark {
+      width: 120px; height: 120px; border-radius: 24px; background: #00ff88;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 32px; scale: 0;
+      box-shadow: 0 0 60px rgba(0,255,136,0.4), 0 0 120px rgba(0,255,136,0.15);
+    }
+
+    h1 {
+      font-size: 100px; font-weight: 900; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #f0f2f5 0%, #8b949e 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      margin-bottom: 16px; opacity: 0; transform: translateY(20px);
+    }
+
+    .tagline {
+      font-size: 22px; color: #8b949e; opacity: 0; transform: translateY(16px);
+      line-height: 1.6;
+    }
+
+    .tagline strong { color: #00ff88; }
+
+    /* Pill tags */
+    .pills { display: flex; gap: 16px; justify-content: center; margin-top: 40px; opacity: 0; }
+    .pill {
+      padding: 10px 20px; border-radius: 100px;
+      border: 1px solid rgba(255,255,255,0.1); font-size: 14px; color: #8b949e;
+      font-family: 'IBM Plex Mono', monospace;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: #00ff88; }
+
+    /* Built on badge */
+    .built-on {
+      position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+      display: flex; align-items: center; gap: 12px;
+      color: #484f58; font-size: 14px; font-family: 'IBM Plex Mono', monospace;
+      opacity: 0;
+    }
+    .built-on span { color: #8b949e; }
+    .sep { color: #484f58; }
+  </style>
+</head>
+<body>
+  <!-- Rings -->
+  <div class="ring" style="width:400px;height:400px" id="r1"></div>
+  <div class="ring" style="width:700px;height:700px" id="r2"></div>
+  <div class="ring" style="width:1000px;height:1000px" id="r3"></div>
+  <div class="ring" style="width:1400px;height:1400px" id="r4"></div>
+
+  <div class="burst" id="burst"></div>
+
+  <div class="center" id="center">
+    <div class="logo-mark" id="logo">
+      <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
+        <path d="M10 30L30 10L50 30L30 50L10 30Z" stroke="#08090d" stroke-width="4" fill="none" stroke-linejoin="round"/>
+        <circle cx="30" cy="30" r="10" fill="#08090d"/>
+      </svg>
+    </div>
+
+    <h1 id="title">OmniVault</h1>
+
+    <div class="tagline" id="tag">
+      <strong>AI agents that debate.</strong> 0G Storage that never forgets.<br>
+      LP capital that never stops earning.
+    </div>
+
+    <div class="pills" id="pills">
+      <div class="pill"><div class="pill-dot"></div>Chainlink Functions</div>
+      <div class="pill"><div class="pill-dot"></div>0G Compute TeeML</div>
+      <div class="pill"><div class="pill-dot"></div>AAVE V3 Yield</div>
+      <div class="pill"><div class="pill-dot"></div>On-Chain Governance</div>
+    </div>
+  </div>
+
+  <div class="built-on" id="builtOn">
+    Built for the <span>0G APAC Hackathon 2026</span>
+    <span class="sep">·</span>
+    Ethereum Sepolia
+    <span class="sep">·</span>
+    Open Source
+  </div>
+
+  <script>
+    const tl = gsap.timeline();
+
+    // Burst
+    tl.to("#burst", { scale: 1, duration: 1.5, ease: "power2.out" }, 0);
+
+    // Rings pulse in
+    tl.to("#r1", { opacity: 1, duration: 0.6 }, 0.3);
+    tl.to("#r2", { opacity: 1, duration: 0.6 }, 0.5);
+    tl.to("#r3", { opacity: 1, duration: 0.6 }, 0.7);
+    tl.to("#r4", { opacity: 1, duration: 0.6 }, 0.9);
+
+    // Rings slow rotation
+    gsap.to("#r1", { rotation: 360, duration: 30, repeat: -1, ease: "none" });
+    gsap.to("#r2", { rotation: -360, duration: 45, repeat: -1, ease: "none" });
+    gsap.to("#r3", { rotation: 360, duration: 60, repeat: -1, ease: "none" });
+
+    // Logo mark
+    tl.to("#logo", { scale: 1, duration: 0.7, ease: "back.out(1.7)" }, 0.8);
+
+    // Center reveal
+    tl.to("#center", { opacity: 1, duration: 0.3 }, 0.8);
+
+    // Title
+    tl.to("#title", { opacity: 1, y: 0, duration: 0.8, ease: "power3.out" }, 1.6);
+
+    // Tagline
+    tl.to("#tag", { opacity: 1, y: 0, duration: 0.8, ease: "power3.out" }, 2.5);
+
+    // Pills
+    tl.to("#pills", { opacity: 1, duration: 0.7, ease: "power2.out" }, 4.0);
+
+    // Built on
+    tl.to("#builtOn", { opacity: 1, duration: 0.6 }, 5.0);
+
+    // Final glow pulse
+    tl.to("#burst", {
+      background: "radial-gradient(ellipse at center, rgba(0,255,136,0.14) 0%, rgba(0,255,136,0.03) 40%, transparent 70%)",
+      duration: 1.5, repeat: -1, yoyo: true, ease: "sine.inOut"
+    }, 6.0);
+  </script>
+</body>
+</html>

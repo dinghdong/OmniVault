@@ -56,7 +56,7 @@ export function useVaultStats(): VaultStats {
   const { data: rawScoreThreshold, isLoading: l4 } = useReadContract({
     address: investmentManagerAddress,
     abi: investmentManagerAbi,
-    functionName: 'SCORE_THRESHOLD',
+    functionName: 'scoreThreshold',
     query: { enabled: hasManager },
   });
 
@@ -94,9 +94,9 @@ export function useVaultStats(): VaultStats {
     ? Number(rawProjectCount as bigint)
     : 0;
 
-  // AI minimum approval score (basis points → percent)
+  // AI minimum approval score (0–100 integer stored on-chain)
   const aiScoreThreshold = rawScoreThreshold !== undefined
-    ? Number(rawScoreThreshold as bigint) / 100
+    ? Number(rawScoreThreshold as bigint)
     : 80;
 
   return { tvl, tvlEth, tvlChange, projectCount, aiScoreThreshold, isLoading, isConfigured };

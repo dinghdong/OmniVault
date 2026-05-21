@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { width: 1920px; height: 1080px; overflow: hidden; background: #08090d;
+           font-family: 'Inter', sans-serif; color: #f0f2f5; }
+
+    .bg {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 1000px 700px at 50% 50%, rgba(99,179,237,0.04) 0%, transparent 70%);
+    }
+
+    /* Grid */
+    .grid-bg { position: absolute; inset: 0; opacity: 0.03;
+      background-image: linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px);
+      background-size: 60px 60px; }
+
+    .scene-label { position: absolute; top: 48px; left: 80px; font-size: 12px;
+      letter-spacing: 0.12em; color: #8b949e; font-family: 'IBM Plex Mono', monospace; opacity: 0; }
+
+    /* Title area */
+    .title-area { position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+                  text-align: center; opacity: 0; }
+    .title-area h2 { font-size: 48px; font-weight: 800; }
+    .grad-blue { background: linear-gradient(135deg, #63b3ed, #a78bfa);
+                 -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .title-area p { font-size: 16px; color: #8b949e; margin-top: 10px; }
+
+    /* Flow diagram - center */
+    .flow-diagram {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) translateY(30px);
+      display: flex; flex-direction: column; align-items: center; gap: 0;
+      width: 1400px; opacity: 0;
+    }
+
+    /* Pipeline nodes */
+    .pipeline-row {
+      display: flex; align-items: center; gap: 0; width: 100%;
+      justify-content: center;
+    }
+
+    .node {
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      padding: 24px 28px; border-radius: 16px; min-width: 200px;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+    }
+    .node.active { border-color: rgba(99,179,237,0.5); background: rgba(99,179,237,0.06); }
+    .node.done { border-color: rgba(0,255,136,0.4); background: rgba(0,255,136,0.05); }
+    .node-icon { font-size: 36px; }
+    .node-label { font-size: 14px; font-weight: 600; text-align: center; }
+    .node-sub { font-size: 11px; color: #8b949e; text-align: center; font-family: 'IBM Plex Mono', monospace; }
+    .node-status {
+      padding: 4px 10px; border-radius: 100px; font-size: 11px; font-family: 'IBM Plex Mono', monospace;
+    }
+
+    .connector { display: flex; align-items: center; padding: 0 8px; }
+    .connector-line {
+      width: 60px; height: 2px; background: rgba(255,255,255,0.1);
+      position: relative; overflow: visible;
+    }
+    .connector-fill {
+      height: 100%; width: 0%; background: linear-gradient(90deg, #63b3ed, #00ff88);
+      transition: width 1.5s ease;
+    }
+    .connector-arrow { color: rgba(255,255,255,0.2); font-size: 16px; margin-left: 4px; }
+
+    /* Score reveal */
+    .score-panel {
+      position: absolute; right: 80px; top: 50%; transform: translateY(-50%);
+      width: 400px; opacity: 0;
+    }
+    .score-card {
+      background: #0d1117; border: 1px solid rgba(0,255,136,0.3); border-radius: 20px;
+      padding: 36px; text-align: center; margin-bottom: 16px;
+      box-shadow: 0 0 60px rgba(0,255,136,0.08);
+    }
+    .score-circle {
+      width: 140px; height: 140px; border-radius: 50%; margin: 0 auto 20px;
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+    }
+    .score-num { font-size: 56px; font-weight: 800; color: #00ff88;
+                 font-family: 'IBM Plex Mono', monospace; }
+    .score-label { font-size: 14px; color: #8b949e; margin-bottom: 16px; }
+    .score-rec { font-size: 22px; font-weight: 700; color: #00ff88; margin-bottom: 8px; }
+    .score-rationale { font-size: 13px; color: #8b949e; line-height: 1.5; }
+
+    .score-bars { background: #0d1117; border: 1px solid rgba(255,255,255,0.08);
+                  border-radius: 14px; padding: 20px; }
+    .score-bar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .score-bar-row:last-child { margin-bottom: 0; }
+    .bar-label { font-size: 12px; color: #8b949e; width: 80px; flex-shrink: 0; }
+    .bar-track { flex: 1; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; }
+    .bar-fill { height: 100%; border-radius: 3px; width: 0%; }
+    .bar-val { font-size: 12px; font-family: 'IBM Plex Mono', monospace; width: 30px;
+               text-align: right; flex-shrink: 0; }
+
+    /* Left: Status timeline */
+    .status-panel {
+      position: absolute; left: 80px; top: 50%; transform: translateY(-50%);
+      width: 360px; opacity: 0;
+    }
+    .status-timeline { display: flex; flex-direction: column; gap: 0; }
+    .status-item {
+      display: flex; gap: 16px; align-items: flex-start; position: relative;
+    }
+    .status-item:not(:last-child)::after {
+      content: ''; position: absolute; left: 15px; top: 40px;
+      width: 2px; height: 40px; background: rgba(255,255,255,0.08);
+    }
+    .status-dot {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.12);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; flex-shrink: 0; margin-top: 4px;
+    }
+    .status-dot.done { background: rgba(0,255,136,0.15); border-color: #00ff88; }
+    .status-dot.active { background: rgba(99,179,237,0.15); border-color: #63b3ed;
+                         animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(99,179,237,0.4)} 50%{box-shadow:0 0 0 8px rgba(99,179,237,0)} }
+    .status-content { padding-bottom: 36px; }
+    .status-title { font-size: 15px; font-weight: 600; }
+    .status-sub { font-size: 12px; color: #8b949e; margin-top: 4px; font-family: 'IBM Plex Mono', monospace; }
+    .status-time { font-size: 11px; color: #484f58; margin-top: 4px; }
+
+    /* Chainlink log */
+    .cl-log {
+      position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+      width: 900px;
+      background: #0a0c10; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
+      padding: 16px 20px; font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+      opacity: 0;
+    }
+    .log-line { color: #8b949e; margin-bottom: 4px; }
+    .log-line .ts { color: #484f58; }
+    .log-line .ok { color: #00ff88; }
+    .log-line .info { color: #63b3ed; }
+    .log-line .warn { color: #facc15; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="aiaudit" data-start="0" data-duration="40" data-width="1920" data-height="1080">
+  <div class="bg"></div>
+  <div class="grid-bg"></div>
+  <div class="scene-label" id="lbl">SCENE 04 — AI AUDIT PIPELINE</div>
+
+  <div class="title-area" id="title">
+    <h2>Chainlink Functions × <span class="grad-blue">0G Compute</span></h2>
+    <p>Verifiable AI inference · 3-dimension audit · Result committed on-chain in &lt; 60s</p>
+  </div>
+
+  <!-- Status timeline (left) -->
+  <div class="status-panel" id="statusPanel">
+    <div style="font-size:12px;color:#8b949e;font-family:'IBM Plex Mono',monospace;letter-spacing:0.1em;margin-bottom:20px">AUDIT PROGRESS</div>
+    <div class="status-timeline">
+      <div class="status-item">
+        <div class="status-dot done" id="d0">✓</div>
+        <div class="status-content">
+          <div class="status-title">Project Submitted</div>
+          <div class="status-sub">commitHash + bizApi on-chain</div>
+          <div class="status-time">09:14:02 UTC</div>
+        </div>
+      </div>
+      <div class="status-item">
+        <div class="status-dot" id="d1">2</div>
+        <div class="status-content">
+          <div class="status-title">Chainlink DON Request</div>
+          <div class="status-sub">requestAudit() → DON picks up</div>
+          <div class="status-time" id="t1">—</div>
+        </div>
+      </div>
+      <div class="status-item">
+        <div class="status-dot" id="d2">3</div>
+        <div class="status-content">
+          <div class="status-title">0G Compute Inference</div>
+          <div class="status-sub">qwen-2.5-7b · 3-dim analysis</div>
+          <div class="status-time" id="t2">—</div>
+        </div>
+      </div>
+      <div class="status-item">
+        <div class="status-dot" id="d3">4</div>
+        <div class="status-content">
+          <div class="status-title">fulfillRequest callback</div>
+          <div class="status-sub">score + contentHash stored</div>
+          <div class="status-time" id="t3">—</div>
+        </div>
+      </div>
+      <div class="status-item">
+        <div class="status-dot" id="d4">5</div>
+        <div class="status-content">
+          <div class="status-title">settleAudit() → Active</div>
+          <div class="status-sub">PendingExecution · timelock starts</div>
+          <div class="status-time" id="t4">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pipeline nodes (center) -->
+  <div class="flow-diagram" id="flow">
+    <div class="pipeline-row">
+      <div class="node done" id="n0">
+        <div class="node-icon">📋</div>
+        <div class="node-label">submitProject()</div>
+        <div class="node-sub">InvestmentManager</div>
+        <div class="node-status" style="background:rgba(0,255,136,0.1);color:#00ff88">On-chain ✓</div>
+      </div>
+      <div class="connector"><div class="connector-line"><div class="connector-fill" id="c1" style="width:100%"></div></div><div class="connector-arrow">→</div></div>
+      <div class="node" id="n1">
+        <div class="node-icon">🔗</div>
+        <div class="node-label">Chainlink DON</div>
+        <div class="node-sub">Functions Router</div>
+        <div class="node-status" id="ns1" style="background:rgba(255,255,255,0.05);color:#8b949e">Waiting…</div>
+      </div>
+      <div class="connector"><div class="connector-line"><div class="connector-fill" id="c2"></div></div><div class="connector-arrow">→</div></div>
+      <div class="node" id="n2">
+        <div class="node-icon">🤖</div>
+        <div class="node-label">0G Compute</div>
+        <div class="node-sub">qwen-2.5-7b TeeML</div>
+        <div class="node-status" id="ns2" style="background:rgba(255,255,255,0.05);color:#8b949e">Queued</div>
+      </div>
+      <div class="connector"><div class="connector-line"><div class="connector-fill" id="c3"></div></div><div class="connector-arrow">→</div></div>
+      <div class="node" id="n3">
+        <div class="node-icon">💾</div>
+        <div class="node-label">fulfillRequest()</div>
+        <div class="node-sub">OmniOracle</div>
+        <div class="node-status" id="ns3" style="background:rgba(255,255,255,0.05);color:#8b949e">Pending</div>
+      </div>
+      <div class="connector"><div class="connector-line"><div class="connector-fill" id="c4"></div></div><div class="connector-arrow">→</div></div>
+      <div class="node" id="n4">
+        <div class="node-icon">🔒</div>
+        <div class="node-label">PendingExecution</div>
+        <div class="node-sub">48h veto window</div>
+        <div class="node-status" id="ns4" style="background:rgba(255,255,255,0.05);color:#8b949e">Locked</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Score panel (right) -->
+  <div class="score-panel" id="scorePanel">
+    <div class="score-card">
+      <div style="font-size:12px;color:#8b949e;font-family:'IBM Plex Mono',monospace;margin-bottom:16px;text-align:left">AI AUDIT RESULT</div>
+      <div class="score-circle" style="background:conic-gradient(#00ff88 280.8deg, rgba(255,255,255,0.06) 0deg)">
+        <span class="score-num" id="scoreNum">0</span>
+      </div>
+      <div class="score-label">AI Audit Score / 100</div>
+      <div class="score-rec">✓ APPROVE</div>
+      <div class="score-rationale">
+        Strong smart contract security, clear tokenomics rationale,
+        and viable Web3 use case justify investment.
+      </div>
+    </div>
+    <div class="score-bars">
+      <div class="score-bar-row">
+        <div class="bar-label">Security</div>
+        <div class="bar-track"><div class="bar-fill" id="b1" style="background:#00ff88"></div></div>
+        <div class="bar-val" id="bv1" style="color:#00ff88">0</div>
+      </div>
+      <div class="score-bar-row">
+        <div class="bar-label">Risk</div>
+        <div class="bar-track"><div class="bar-fill" id="b2" style="background:#63b3ed"></div></div>
+        <div class="bar-val" id="bv2" style="color:#63b3ed">0</div>
+      </div>
+      <div class="score-bar-row">
+        <div class="bar-label">Final</div>
+        <div class="bar-track"><div class="bar-fill" id="b3" style="background:#a78bfa"></div></div>
+        <div class="bar-val" id="bv3" style="color:#a78bfa">0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log terminal -->
+  <div class="cl-log" id="clLog">
+    <div class="log-line"><span class="ts">[09:14:02]</span> <span class="ok">✓</span> ProjectSubmitted #3 · requestAudit() triggered</div>
+    <div class="log-line" id="l2" style="opacity:0"><span class="ts">[09:14:05]</span> <span class="info">ℹ</span> Chainlink DON picked up request 0x3a7f…c84d</div>
+    <div class="log-line" id="l3" style="opacity:0"><span class="ts">[09:14:18]</span> <span class="info">ℹ</span> 0G Compute inference started · model=qwen/qwen-2.5-7b-instruct</div>
+    <div class="log-line" id="l4" style="opacity:0"><span class="ts">[09:14:31]</span> <span class="warn">⚡</span> Scores: security=82 risk=74 final=78 · recommendation=APPROVE</div>
+    <div class="log-line" id="l5" style="opacity:0"><span class="ts">[09:14:33]</span> <span class="ok">✓</span> fulfillRequest · auditScore=78 · contentHash=0x9d2a…</div>
+    <div class="log-line" id="l6" style="opacity:0"><span class="ts">[09:14:35]</span> <span class="ok">✓</span> settleAudit() · status → PendingExecution · timelock=48h</div>
+  </div>
+
+    </div>
+
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    window.__timelines = window.__timelines || {};
+    window.__timelines["aiaudit"] = tl;
+
+    // Appear
+    tl.to("#lbl", { opacity: 1, duration: 0.5 });
+    tl.to("#title", { opacity: 1, y: 0, duration: 0.7, ease: "power3.out" }, 0.5);
+    tl.to("#statusPanel", { opacity: 1, duration: 0.7, ease: "power3.out" }, 1.0);
+    tl.to("#flow", { opacity: 1, duration: 0.7, ease: "power3.out" }, 1.2);
+    tl.to("#clLog", { opacity: 1, duration: 0.6 }, 2.0);
+
+    function activateNode(nodeId, statusId, statusText, color, logId, dotId, timeId, timeText) {
+      return function() {
+        const node = document.getElementById(nodeId);
+        const status = document.getElementById(statusId);
+        if (node) node.classList.add("active");
+        if (status) { status.textContent = statusText; status.style.color = color;
+                      status.style.background = `rgba(${color === '#63b3ed' ? '99,179,237' : '0,255,136'},0.1)`; }
+        if (logId) { const el = document.getElementById(logId); if (el) gsap.to(el, {opacity:1,duration:0.4}); }
+        if (dotId) {
+          const dot = document.getElementById(dotId);
+          if (dot) { dot.classList.add("active"); }
+        }
+        if (timeId) document.getElementById(timeId).textContent = timeText;
+      };
+    }
+
+    function doneNode(nodeId, statusId, connId, dotId) {
+      return function() {
+        const node = document.getElementById(nodeId);
+        if (node) { node.classList.remove("active"); node.classList.add("done"); }
+        const status = document.getElementById(statusId);
+        if (status) { status.textContent = "Done ✓"; status.style.color = "#00ff88";
+                      status.style.background = "rgba(0,255,136,0.1)"; }
+        const conn = document.getElementById(connId);
+        if (conn) conn.style.width = "100%";
+        const dot = document.getElementById(dotId);
+        if (dot) { dot.classList.remove("active"); dot.classList.add("done"); dot.textContent = "✓"; }
+      };
+    }
+
+    // Step 1: Chainlink picks up
+    tl.add(activateNode("n1","ns1","Running…","#63b3ed","l2","d1","t1","09:14:05"), 5.0);
+    tl.add(doneNode("n1","ns1","c2","d1"), 10.0);
+
+    // Step 2: 0G Compute inference
+    tl.add(activateNode("n2","ns2","Inferring…","#63b3ed","l3","d2","t2","09:14:18"), 10.5);
+    tl.add(() => { gsap.to("#l4",{opacity:1,duration:0.4}); }, 19.0);
+    tl.add(doneNode("n2","ns2","c3","d2"), 22.0);
+
+    // Step 3: fulfillRequest
+    tl.add(activateNode("n3","ns3","Storing…","#63b3ed","l5","d3","t3","09:14:33"), 22.5);
+    tl.add(doneNode("n3","ns3","c4","d3"), 26.0);
+
+    // Score reveal
+    tl.to("#scorePanel", { opacity: 1, x: 0, duration: 0.8, ease: "power3.out" }, 27.0);
+    tl.add(() => {
+      let s = 0;
+      const iv = setInterval(() => {
+        s = Math.min(s + 2, 78);
+        document.getElementById("scoreNum").textContent = s;
+        if (s >= 78) clearInterval(iv);
+      }, 20);
+    }, 27.5);
+    tl.add(() => {
+      gsap.to("#b1", {width:"82%", duration:1.2, ease:"power2.out"});
+      gsap.to("#b2", {width:"74%", duration:1.2, ease:"power2.out", delay:0.15});
+      gsap.to("#b3", {width:"78%", duration:1.2, ease:"power2.out", delay:0.3});
+      document.getElementById("bv1").textContent = "82";
+      document.getElementById("bv2").textContent = "74";
+      document.getElementById("bv3").textContent = "78";
+    }, 27.8);
+
+    // Step 4: Settle
+    tl.add(() => { gsap.to("#l6",{opacity:1,duration:0.4}); }, 30.0);
+    tl.add(activateNode("n4","ns4","Active","#00ff88",null,"d4","t4","09:14:35"), 30.5);
+    tl.add(doneNode("n4","ns4",null,"d4"), 34.0);
+  </script>
+</body>
+</html>

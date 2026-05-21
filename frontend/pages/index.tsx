@@ -1,13 +1,15 @@
 'use client';
 import WalletButton from '../components/WalletButton';
-import NetworkSelector from '../components/NetworkSelector';
 import Modal from '../components/Modal';
 import DepositModal from '../components/DepositModal';
 import WithdrawModal from '../components/WithdrawModal';
 import ApplyModal from '../components/ApplyModal';
+import ProjectsSection from '../components/ProjectsSection';
+import LPDashboard from '../components/LPDashboard';
 import { useAccount, useChainId, useSwitchChain } from 'wagmi';
 import { useReadContract } from 'wagmi';
-import { contractChainId } from '../hooks/contracts';
+import { contractChainId, explorerUrl,
+  fundVaultAddress, investmentManagerAddress, omniOracleAddress } from '../hooks/contracts';
 import { useState } from 'react';
 import { formatUnits } from 'viem';
 import { useVaultStats } from '../hooks/useVaultStats';
@@ -39,9 +41,9 @@ export default function Home() {
     <main>
       {isWrongChain && (
         <div className="wrong-chain-topbar">
-          ⚠️ 当前网络不是合约所在网络（Hardhat 31337）。
+          ⚠️ Please switch to Ethereum Sepolia (chainId {contractChainId}) to interact.
           <button onClick={() => switchChain({ chainId: contractChainId })}>
-            切换网络
+            Switch Network
           </button>
         </div>
       )}
@@ -57,13 +59,11 @@ export default function Home() {
           </div>
           <div className="nav-links">
             <a href="#features">Features</a>
-            <a href="#how-it-works">How It Works</a>
+            <a href="#pipeline">Pipeline</a>
             <a href="#portfolio">Portfolio</a>
             <a href="#apply">Apply</a>
           </div>
           <div className={`nav-connect${isConnected ? ' nav-connect--active' : ' nav-connect--idle'}`}>
-            <NetworkSelector />
-            {isConnected && <div className="nav-divider" />}
             <WalletButton />
           </div>
         </div>
@@ -73,7 +73,7 @@ export default function Home() {
         <div className="hero-content">
           <div className="badge">
             <span className="badge-dot"></span>
-            AI-Powered Decentralized VC
+            AI-Powered Decentralized VC · Built on 0G
           </div>
           <h1 className="hero-title">
             The Future of<br />
@@ -146,6 +146,7 @@ export default function Home() {
               <button className="btn-primary" onClick={() => setDepositOpen(true)}>Deposit</button>
               <button className="btn-secondary" onClick={() => setWithdrawOpen(true)}>Withdraw</button>
             </div>
+            <LPDashboard />
           </div>
         ) : (
           <div className="wallet-prompt">
@@ -204,6 +205,9 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── AI Audit Pipeline ─────────────────────────────────────────────── */}
+      <ProjectsSection />
+
       {/* ── Apply for Funding ─────────────────────────────────────────────── */}
       <section className="apply-section" id="apply">
         <div className="apply-section-inner">
@@ -220,15 +224,15 @@ export default function Home() {
             <div className="apply-checklist">
               <div className="apply-check-item">
                 <span className="apply-check-icon">✦</span>
-                <span>AI agents review your code, architecture &amp; security</span>
+                <span>3 independent AI agents audit your pitch deck &amp; code</span>
               </div>
               <div className="apply-check-item">
                 <span className="apply-check-icon">✦</span>
-                <span>Multi-agent consensus: score ≥ 80% unlocks investment</span>
+                <span>Audit reports stored on 0G Storage · Merkle proof on-chain</span>
               </div>
               <div className="apply-check-item">
                 <span className="apply-check-icon">✦</span>
-                <span>Funding from the vault with on-chain vesting &amp; milestones</span>
+                <span>48h LP community veto window before any funds move</span>
               </div>
             </div>
           </div>
@@ -303,21 +307,20 @@ export default function Home() {
           </div>
           <div className="footer-links">
             <div className="footer-column">
-              <h4>Protocol</h4>
-              <a href="#">Documentation</a>
-              <a href="#">Smart Contracts</a>
-              <a href="#">Security</a>
+              <h4>Contracts (Sepolia)</h4>
+              <a href={`${explorerUrl}/address/${fundVaultAddress}`} target="_blank" rel="noopener noreferrer">FundVault ↗</a>
+              <a href={`${explorerUrl}/address/${investmentManagerAddress}`} target="_blank" rel="noopener noreferrer">InvestmentManager ↗</a>
+              <a href={`${explorerUrl}/address/${omniOracleAddress}`} target="_blank" rel="noopener noreferrer">OmniOracle ↗</a>
             </div>
             <div className="footer-column">
               <h4>Community</h4>
-              <a href="#">Discord</a>
-              <a href="#">Twitter</a>
-              <a href="#">Forum</a>
+              <a href="https://github.com/dinghdong/OmniVault" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+              <a href="https://twitter.com" target="_blank" rel="noopener noreferrer">Twitter ↗</a>
             </div>
           </div>
         </div>
         <div className="footer-bottom">
-          <p>© 2026 OmniVault. Built on Ethereum.</p>
+          <p>© 2026 OmniVault. Built on <a href="https://0g.ai" target="_blank" rel="noopener noreferrer" style={{ color: '#00ff88' }}>0G</a> · AI-powered decentralized VC.</p>
         </div>
       </footer>
 
