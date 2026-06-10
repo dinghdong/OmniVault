@@ -7,6 +7,7 @@ import {
   explorerUrl,
   investmentManagerAddress, investmentManagerAbi,
   fundVaultAddress, fundVaultAbi,
+  contractChainId,
 } from '../hooks/contracts';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -83,6 +84,7 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
     abi:          fundVaultAbi,
     functionName: 'balanceOf',
     args:         address ? [address] : undefined,
+    chainId:      contractChainId,
     query:        { enabled: !!address },
   } as any);
   const isLP = lpBalance !== undefined && (lpBalance as bigint) > BigInt(0);
@@ -117,6 +119,7 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
     abi:          investmentManagerAbi,
     functionName: 'vestingProgress' as any,
     args:         [BigInt(projectId)] as any,
+    chainId:      contractChainId,
     query:        { enabled: status.statusNum === 5, refetchInterval: 10_000 },
   } as any);
   const vestingData  = vestingRaw as [bigint, bigint, bigint, bigint] | undefined;

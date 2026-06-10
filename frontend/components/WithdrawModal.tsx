@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useAccount, useChainId, useReadContract } from 'wagmi';
 import { formatUnits } from 'viem';
 import { useVaultTransactions } from '../hooks/useVaultTransactions';
-import { fundTokenAbi, fundTokenAddress } from '../hooks/contracts';
+import { fundTokenAbi, fundTokenAddress, contractChainId } from '../hooks/contracts';
 import TxStatus from './TxStatus';
 
 const getSharesAbi = [
@@ -27,6 +27,7 @@ export default function WithdrawModal() {
     abi: getSharesAbi,
     functionName: 'getShares',
     args: [address as `0x${string}`],
+    chainId: contractChainId,
     query: { enabled: !!address },
   });
 
@@ -35,6 +36,7 @@ export default function WithdrawModal() {
     abi: fundTokenAbi,
     functionName: 'balanceOf',
     args: [address as `0x${string}`],
+    chainId: contractChainId,
     query: { enabled: !!address },
   });
 

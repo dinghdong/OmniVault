@@ -206,7 +206,7 @@ describe("InvestmentManager (AI Agent reform)", function () {
   // ── executeInvestment ───────────────────────────────────────────────────────
   describe("executeInvestment", function () {
     it("executes after timelock, sends upfront ETH to applicant", async function () {
-      const investAmount = ethers.parseEther("1");
+      const investAmount = ethers.parseEther("0.5"); // == requestedAmount
 
       // Fund MockFundVault with ETH so divestForInvestment can send it
       await owner.sendTransaction({ to: await mockFV.getAddress(), value: investAmount });
@@ -241,6 +241,15 @@ describe("InvestmentManager (AI Agent reform)", function () {
       await expect(im.executeInvestment(pid, ethers.parseEther("0.1"), "0x"))
         .to.be.revertedWithCustomError(im, "InvalidStatus");
     });
+
+    it("reverts when amount exceeds requestedAmount", async function () {
+      await owner.sendTransaction({ to: await mockFV.getAddress(), value: ethers.parseEther("1") });
+      const pid = await submitProject(); // requests 0.5 ETH
+      await fulfillApproval(pid, 80n);
+      await increaseTime(EXECUTION_DELAY_SEC + 1);
+      await expect(im.executeInvestment(pid, ethers.parseEther("1"), "0x"))
+        .to.be.revertedWithCustomError(im, "AmountExceedsRequested");
+    });
   });
 
   // ── getAuditScores ──────────────────────────────────────────────────────────
@@ -258,15 +267,61 @@ describe("InvestmentManager (AI Agent reform)", function () {
 
   // ── circuit break ───────────────────────────────────────────────────────────
   describe("triggerCircuitBreak", function () {
-    it("only RISK_AGENT_ROLE can trigger", async function () {
+    async function activeProject() {
       const investAmount = ethers.parseEther("0.5");
       await owner.sendTransaction({ to: await mockFV.getAddress(), value: investAmount });
       const pid = await submitProject();
       await fulfillApproval(pid, 75n);
       await increaseTime(EXECUTION_DELAY_SEC + 1);
       await im.executeInvestment(pid, investAmount, "0x");
+      return pid;
+    }
+
+    it("only RISK_AGENT_ROLE can trigger", async function () {
+      const pid = await activeProject();
       await expect(im.connect(other).triggerCircuitBreak(pid))
         .to.be.revertedWithCustomError(im, "AccessControlUnauthorizedAccount");
+    });
+
+    it("freezes vesting claims after circuit break", async function () {
+      const pid = await activeProject();
+      // Let some vesting accrue, confirm it is claimable while Active
+      await increaseTime(7 * 24 * 3600);
+      expect(await im.getClaimableAmount(pid)).to.be.gt(0n);
+
+      await im.connect(riskAgent).triggerCircuitBreak(pid);
+
+      expect(await im.getClaimableAmount(pid)).to.equal(0n);
+      await expect(im.claimPayout(pid))
+        .to.be.revertedWithCustomError(im, "InvalidStatus");
+    });
+  });
+
+  // ── DeadManSwitch integration ───────────────────────────────────────────────
+  describe("DeadManSwitch write-off wiring", function () {
+    it("triggerDeadSwitch marks the project WriteOff in InvestmentManager", async function () {
+      const investAmount = ethers.parseEther("0.5");
+      await owner.sendTransaction({ to: await mockFV.getAddress(), value: investAmount });
+      const pid = await submitProject();
+      await fulfillApproval(pid, 75n);
+      await increaseTime(EXECUTION_DELAY_SEC + 1);
+      await im.executeInvestment(pid, investAmount, "0x");
+
+      const DMSF = await hre.ethers.getContractFactory("DeadManSwitch");
+      const dms = await DMSF.deploy();
+      await dms.waitForDeployment();
+
+      await dms.setInvestmentManager(await im.getAddress());
+      await im.grantRole(await im.RISK_AGENT_ROLE(), await dms.getAddress());
+      await dms.registerProject(pid);
+
+      // Silent past PING_WINDOW (30d) + GRACE_PERIOD (30d)
+      await increaseTime(61 * 24 * 3600);
+      await dms.connect(other).triggerDeadSwitch(pid);
+
+      const p = await im.projects(pid);
+      expect(p.status).to.equal(8); // WriteOff
+      expect((await dms.watches(pid)).active).to.equal(false);
     });
   });
 

@@ -9,14 +9,20 @@
 
 import { test, expect, Page } from '@playwright/test';
 import { ethers } from 'ethers';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
+// Contract addresses come from .e2e-state.json (written by scripts/e2e-local.ts)
+const STATE_PATH = path.resolve(__dirname, '../../.e2e-state.json');
+const E2E_STATE  = JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
+
 const HARDHAT_ACCOUNT = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
 const HARDHAT_RPC     = 'http://127.0.0.1:8545';
 const CHAIN_ID_HEX    = '0x7a69';   // 31337
-const APP_URL         = 'http://localhost:3000';
-const FUND_VAULT      = '0x68B1D87F95878fE05B998F19b66F4baba5De1aed';
-const FUND_TOKEN      = '0x9A9f2CCfdE556A7E9Ff0848998Aa4a0CFD8863AE';
+const APP_URL         = process.env.E2E_BASE_URL || 'http://localhost:3000';
+const FUND_VAULT      = E2E_STATE.contracts.fundVault;
+const FUND_TOKEN      = E2E_STATE.contracts.fundToken;
 
 // Verified keccak4 selectors
 const SEL_GET_SHARES  = '0xf04da65b'; // getShares(address)
@@ -225,7 +231,7 @@ test.describe('OmniVault Frontend E2E', () => {
     await page.locator('button.btn-primary.btn-full').click();
 
     await expect(
-      page.locator('.success-message', { hasText: /Deposit successful/i })
+      page.locator('.txs-title--success', { hasText: /Deposit Confirmed/i })
     ).toBeVisible({ timeout: 30000 });
 
     const sharesAfter = await getShares(HARDHAT_ACCOUNT);
@@ -315,7 +321,7 @@ test.describe('OmniVault Frontend E2E', () => {
     await page.locator('button.btn-primary.btn-full').click();
 
     await expect(
-      page.locator('.success-message', { hasText: /Withdrawal successful/i })
+      page.locator('.txs-title--success', { hasText: /Withdrawal Confirmed/i })
     ).toBeVisible({ timeout: 30000 });
 
     const sharesAfter = await getShares(HARDHAT_ACCOUNT);

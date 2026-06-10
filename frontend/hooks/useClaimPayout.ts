@@ -1,6 +1,6 @@
 'use client';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { investmentManagerAddress, investmentManagerAbi } from './contracts';
+import { investmentManagerAddress, investmentManagerAbi, contractChainId } from './contracts';
 
 export function useClaimPayout(projectId: number, enabled = true) {
   const { data: progressData, isLoading: progressLoading } = useReadContract({
@@ -8,6 +8,7 @@ export function useClaimPayout(projectId: number, enabled = true) {
     abi: investmentManagerAbi,
     functionName: 'vestingProgress',
     args: [BigInt(projectId)],
+    chainId: contractChainId,
     query: { enabled: enabled && projectId > 0, refetchInterval: 15_000 },
   });
 
@@ -16,6 +17,7 @@ export function useClaimPayout(projectId: number, enabled = true) {
     abi: investmentManagerAbi,
     functionName: 'getClaimableAmount',
     args: [BigInt(projectId)],
+    chainId: contractChainId,
     query: { enabled: enabled && projectId > 0, refetchInterval: 15_000 },
   });
 

@@ -3,7 +3,7 @@ import { useState, useRef, useCallback } from 'react';
 import Head from 'next/head';
 import { useAccount, useReadContract, useReadContracts } from 'wagmi';
 import { formatEther } from 'viem';
-import { nfaAddress, nfaAbi, fundVaultAddress, fundVaultAbi, investmentManagerAddress, investmentManagerAbi } from '../hooks/contracts';
+import { nfaAddress, nfaAbi, fundVaultAddress, fundVaultAbi, investmentManagerAddress, investmentManagerAbi, contractChainId } from '../hooks/contracts';
 import { useProjectSubmit } from '../hooks/useProjectSubmit';
 
 /* ─── Geometric pixel avatar from token ID ───────────────────────────────── */
@@ -87,23 +87,25 @@ export default function AgentSimPage() {
   const { data: tokenIds } = useReadContract({
     address: nfaAddress, abi: nfaAbi, functionName: 'tokensOfOwner',
     args: [address ?? '0x0000000000000000000000000000000000000000' as `0x${string}`],
+    chainId: contractChainId,
     query: { enabled: !!address, refetchInterval: 15_000 },
   });
 
   const ids = (tokenIds as bigint[] | undefined) ?? [];
 
   const { data: agentMetas } = useReadContracts({
-    contracts: ids.map(id => ({ address: nfaAddress, abi: nfaAbi, functionName: 'getAgent' as const, args: [id] as const })),
+    contracts: ids.map(id => ({ address: nfaAddress, abi: nfaAbi, functionName: 'getAgent' as const, args: [id] as const, chainId: contractChainId })),
     query: { enabled: ids.length > 0 },
   });
 
   const { data: agentDids } = useReadContracts({
-    contracts: ids.map(id => ({ address: nfaAddress, abi: nfaAbi, functionName: 'getDid' as const, args: [id] as const })),
+    contracts: ids.map(id => ({ address: nfaAddress, abi: nfaAbi, functionName: 'getDid' as const, args: [id] as const, chainId: contractChainId })),
     query: { enabled: ids.length > 0 },
   });
 
   const { data: vaultBalRaw } = useReadContract({
     address: fundVaultAddress, abi: fundVaultAbi, functionName: 'vaultBalance',
+    chainId: contractChainId,
     query: { refetchInterval: 15_000 },
   });
 

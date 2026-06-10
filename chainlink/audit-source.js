@@ -22,7 +22,8 @@ const sourceCodeHash = args[1];
 const bizApi         = args[2];
 
 const BASE   = secrets.ZG_BASE_URL || "https://router-api-testnet.integratenetwork.work/v1";
-const APIKEY = secrets.ZG_API_KEY  || "sk-6d323fcd-2083-4a00-850d-1b8d1273d45b";
+const APIKEY = secrets.ZG_API_KEY;
+if (!APIKEY) throw new Error("ZG_API_KEY DON-hosted secret not configured");
 const MODEL  = "qwen/qwen-2.5-7b-instruct";
 
 // ── A2A Multi-agent audit prompt ─────────────────────────────────────────────

@@ -4,6 +4,7 @@ import {
   investmentManagerAddress,
   investmentManagerAbi,
   PROJECT_STATUS,
+  contractChainId,
 } from './contracts';
 
 export interface ProjectData {
@@ -60,6 +61,7 @@ export function useProjects(externalCount?: number) {
     address: investmentManagerAddress,
     abi: investmentManagerAbi,
     functionName: 'projectCount',
+    chainId: contractChainId,
     query: { enabled: hasManager && externalCount === undefined, refetchInterval: 10_000 },
   });
 
@@ -72,6 +74,7 @@ export function useProjects(externalCount?: number) {
       abi: investmentManagerAbi,
       functionName: 'projects' as const,
       args: [BigInt(id)] as const,
+      chainId: contractChainId,
     })),
     query: { enabled: projectCount > 0, refetchInterval: 10_000 },
   });

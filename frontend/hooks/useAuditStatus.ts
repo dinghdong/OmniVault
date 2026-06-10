@@ -8,6 +8,7 @@ import {
   omniOracleAddress,
   omniOracleAbi,
   PROJECT_STATUS,
+  contractChainId,
 } from './contracts';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -106,7 +107,7 @@ const POLL_INTERVAL_MS = 8_000;
 export function useAuditStatus(projectId: number | null): AuditStatus {
   const enabled = projectId !== null && projectId > 0;
 
-  const publicClient = usePublicClient();
+  const publicClient = usePublicClient({ chainId: contractChainId });
   const [rawSummary, setRawSummary] = useState<string>('');
   const [summaryFetched, setSummaryFetched] = useState(false);
 
@@ -118,6 +119,7 @@ export function useAuditStatus(projectId: number | null): AuditStatus {
         abi:     investmentManagerAbi,
         functionName: 'projects',
         args:    [BigInt(projectId ?? 0)],
+        chainId: contractChainId,
       },
       // 1: OmniOracle.fulfilledScore(projectId) — non-zero once callback stored result
       {
@@ -125,6 +127,7 @@ export function useAuditStatus(projectId: number | null): AuditStatus {
         abi:     omniOracleAbi,
         functionName: 'fulfilledScore',
         args:    [BigInt(projectId ?? 0)],
+        chainId: contractChainId,
       },
     ],
     query: {

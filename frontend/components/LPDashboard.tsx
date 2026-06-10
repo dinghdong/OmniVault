@@ -6,6 +6,7 @@ import {
   fundTokenAddress, fundTokenAbi,
   investmentManagerAddress, investmentManagerAbi,
   PROJECT_STATUS,
+  contractChainId,
 } from '../hooks/contracts';
 import { useProjects } from '../hooks/useProjects';
 
@@ -100,10 +101,10 @@ export default function LPDashboard() {
 
   const { data, isLoading: statsLoading } = useReadContracts({
     contracts: [
-      { address: fundTokenAddress, abi: fundTokenAbi, functionName: 'totalSupply' },
-      { address: fundTokenAddress, abi: fundTokenAbi, functionName: 'accrualFactor' },
-      { address: fundTokenAddress, abi: fundTokenAbi, functionName: 'balanceOf', args: [address ?? '0x0000000000000000000000000000000000000000' as `0x${string}`] },
-      { address: fundTokenAddress, abi: fundTokenAbi, functionName: 'getShares',  args: [address ?? '0x0000000000000000000000000000000000000000' as `0x${string}`] },
+      { address: fundTokenAddress, abi: fundTokenAbi, functionName: 'totalSupply', chainId: contractChainId },
+      { address: fundTokenAddress, abi: fundTokenAbi, functionName: 'accrualFactor', chainId: contractChainId },
+      { address: fundTokenAddress, abi: fundTokenAbi, functionName: 'balanceOf', args: [address ?? '0x0000000000000000000000000000000000000000' as `0x${string}`], chainId: contractChainId },
+      { address: fundTokenAddress, abi: fundTokenAbi, functionName: 'getShares',  args: [address ?? '0x0000000000000000000000000000000000000000' as `0x${string}`], chainId: contractChainId },
     ],
     query: { enabled: !!address, refetchInterval: 10_000 },
   });

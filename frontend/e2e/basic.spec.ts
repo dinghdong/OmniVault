@@ -6,13 +6,13 @@ test.describe('Basic Page Load Tests', () => {
     expect(response?.status()).toBeLessThan(400);
   });
 
-  test('dashboard page loads with 200 status', async ({ page }) => {
-    const response = await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+  test('agent-sim devtool page loads with 200 status', async ({ page }) => {
+    const response = await page.goto('/agent-sim', { waitUntil: 'domcontentloaded' });
     expect(response?.status()).toBeLessThan(400);
   });
 
-  test('apply page loads with 200 status', async ({ page }) => {
-    const response = await page.goto('/apply', { waitUntil: 'domcontentloaded' });
+  test('audit detail page loads with 200 status', async ({ page }) => {
+    const response = await page.goto('/audit/1', { waitUntil: 'domcontentloaded' });
     expect(response?.status()).toBeLessThan(400);
   });
 });
@@ -28,27 +28,23 @@ test.describe('Homepage Content', () => {
     await page.goto('/', { waitUntil: 'networkidle' });
     await expect(page.locator('h1')).toBeVisible();
   });
-});
 
-test.describe('Dashboard Page Content', () => {
-  test('should contain Fund Dashboard text', async ({ page }) => {
-    await page.goto('/dashboard', { waitUntil: 'networkidle' });
-    const content = await page.content();
-    expect(content).toContain('Fund Dashboard');
+  test('should render all main sections', async ({ page }) => {
+    await page.goto('/', { waitUntil: 'networkidle' });
+    await expect(page.locator('#portfolio')).toBeAttached();
+    await expect(page.locator('#pipeline')).toBeAttached();
+    await expect(page.locator('#apply')).toBeAttached();
+    await expect(page.locator('#how-it-works')).toBeAttached();
   });
 });
 
-test.describe('Apply Page Content', () => {
-  test('should contain Apply text', async ({ page }) => {
-    await page.goto('/apply', { waitUntil: 'networkidle' });
-    const content = await page.content();
-    expect(content).toContain('Apply');
-  });
-
-  test('should show three steps', async ({ page }) => {
-    await page.goto('/apply', { waitUntil: 'networkidle' });
-    await expect(page.locator('text=Project Info')).toBeVisible();
-    await expect(page.locator('text=Code & Docs')).toBeVisible();
-    await expect(page.locator('text=Submit')).toBeVisible();
+test.describe('Project Pipeline (seeded chain state)', () => {
+  test('pipeline section shows seeded projects', async ({ page }) => {
+    await page.goto('/', { waitUntil: 'networkidle' });
+    await page.locator('#pipeline').scrollIntoViewIfNeeded();
+    // e2e-local.ts seeds 5 projects; cards render once the chain read resolves
+    await expect(
+      page.locator('#pipeline .project-card, #pipeline [class*="project"]').first()
+    ).toBeVisible({ timeout: 15000 });
   });
 });

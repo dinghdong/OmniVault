@@ -45,6 +45,9 @@ Thumbs.db
 # Hardhat
 .e2e-state.json
 
+# Rust / Stylus build artifacts
+stylus/scoring-engine/target/
+
 # TypeScript
 *.tsbuildinfo
 

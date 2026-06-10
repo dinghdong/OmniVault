@@ -8,7 +8,7 @@ export default defineConfig({
   workers: 1,         // run serially — tests share Hardhat state
 
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: process.env.E2E_BASE_URL || 'http://localhost:3000',
     headless: true,
     viewport: { width: 1280, height: 900 },
     // Show full page on failure

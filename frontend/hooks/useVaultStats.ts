@@ -5,6 +5,7 @@ import {
   fundTokenAddress,
   investmentManagerAddress,
   investmentManagerAbi,
+  contractChainId,
 } from './contracts';
 
 const fundTokenAbi = [
@@ -31,6 +32,7 @@ export function useVaultStats(): VaultStats {
     address: fundTokenAddress,
     abi: fundTokenAbi,
     functionName: 'accrualFactor',
+    chainId: contractChainId,
     query: { enabled: isConfigured },
   });
 
@@ -38,6 +40,7 @@ export function useVaultStats(): VaultStats {
     address: fundTokenAddress,
     abi: fundTokenAbi,
     functionName: 'totalSupply',
+    chainId: contractChainId,
     query: { enabled: isConfigured },
   });
 
@@ -50,6 +53,7 @@ export function useVaultStats(): VaultStats {
     address: investmentManagerAddress,
     abi: investmentManagerAbi,
     functionName: 'projectCount',
+    chainId: contractChainId,
     query: { enabled: hasManager },
   });
 
@@ -57,6 +61,7 @@ export function useVaultStats(): VaultStats {
     address: investmentManagerAddress,
     abi: investmentManagerAbi,
     functionName: 'scoreThreshold',
+    chainId: contractChainId,
     query: { enabled: hasManager },
   });
 

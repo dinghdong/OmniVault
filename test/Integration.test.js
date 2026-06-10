@@ -2,10 +2,11 @@ const { expect } = require("chai");
 const hre = require("hardhat");
 const { ethers } = require("hardhat");
 
-const e18 = 10n ** 18n;
 const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
-const DELAY = 72 * 3600;          // seconds — matches EXECUTION_DELAY constant
-const COMMUNITY_WINDOW = 48 * 3600; // AgentVoting community veto window
+const CONTRACT_ADDR = "0x1234567890123456789012345678901234567890";
+const THRESHOLD = 60n;
+const EXECUTION_DELAY_SEC = 3 * 60; // matches InvestmentManager.EXECUTION_DELAY
+const WEEK = 7 * 24 * 3600;
 
 async function increaseTime(seconds) {
   await hre.network.provider.send("evm_increaseTime", [seconds]);
@@ -13,8 +14,8 @@ async function increaseTime(seconds) {
 }
 
 describe("Cross-Contract Integration", function () {
-  let ft, fv, im, pr, at, weth, aavePool, aWeth;
-  let owner, lp, applicant, oracle, riskAgent;
+  let ft, fv, im, pr, at, mockOracle;
+  let owner, lp, applicant, oracle, riskAgent, other;
 
   beforeEach(async function () {
     const signers = await hre.ethers.getSigners();
@@ -23,36 +24,24 @@ describe("Cross-Contract Integration", function () {
     applicant = signers[2];
     oracle    = signers[3];
     riskAgent = signers[4];
-
-    const MockWETH = await hre.ethers.getContractFactory("MockWETH");
-    weth = await MockWETH.deploy();
-    await weth.waitForDeployment();
-
-    const MockAavePool = await hre.ethers.getContractFactory("MockAavePool");
-    aavePool = await MockAavePool.deploy();
-    await aavePool.waitForDeployment();
-
-    const MockAToken = await hre.ethers.getContractFactory("MockAToken");
-    aWeth = await MockAToken.deploy(await aavePool.getAddress(), await weth.getAddress());
-    await aWeth.waitForDeployment();
-    await aavePool.setAToken(await weth.getAddress(), await aWeth.getAddress());
+    other     = signers[5];
 
     const FundTokenF = await hre.ethers.getContractFactory("FundToken");
     ft = await FundTokenF.deploy();
     await ft.waitForDeployment();
 
     const FundVaultF = await hre.ethers.getContractFactory("FundVault");
-    fv = await FundVaultF.deploy(
-      await weth.getAddress(),
-      await aavePool.getAddress(),
-      await aWeth.getAddress(),
-      await ft.getAddress()
-    );
+    fv = await FundVaultF.deploy(await ft.getAddress());
     await fv.waitForDeployment();
 
-    const IM = await hre.ethers.getContractFactory("InvestmentManager");
-    im = await IM.deploy(await fv.getAddress(), await weth.getAddress());
+    const MockOracleF = await hre.ethers.getContractFactory("MockOmniOracleV2");
+    mockOracle = await MockOracleF.deploy();
+    await mockOracle.waitForDeployment();
+
+    const IMF = await hre.ethers.getContractFactory("InvestmentManager");
+    im = await IMF.deploy(await fv.getAddress(), THRESHOLD);
     await im.waitForDeployment();
+    await im.setOracle(await mockOracle.getAddress());
 
     const PR = await hre.ethers.getContractFactory("PromptRegistry");
     pr = await PR.deploy(owner.address);
@@ -65,134 +54,249 @@ describe("Cross-Contract Integration", function () {
     // Roles
     await ft.grantRole(await ft.MINTER_ROLE(), await fv.getAddress());
     await ft.grantRole(await ft.BURNER_ROLE(), await fv.getAddress());
-    await fv.grantRole(await fv.INVESTOR_ROLE(), owner.address);
-    await fv.grantRole(await fv.INVESTOR_ROLE(), oracle.address);
     await fv.grantRole(await fv.INVESTOR_ROLE(), await im.getAddress());
-    await im.grantRole(await im.AI_ORACLE_ROLE(),  oracle.address);
+    await fv.grantRole(await fv.INVESTOR_ROLE(), owner.address); // P&L simulation
     await im.grantRole(await im.RISK_AGENT_ROLE(), riskAgent.address);
     await at.grantRole(await at.AI_ORACLE_ROLE(), oracle.address);
   });
 
   // ── helpers ────────────────────────────────────────────────────────────────
-  async function submitProject(commitSuffix = "commit") {
+  async function submitProject(suffix = "commit", requested = ethers.parseEther("0.5")) {
     await im.connect(applicant).submitProject(
-      hre.ethers.id(commitSuffix),
-      "0x1234567890123456789012345678901234567890",
+      hre.ethers.id(suffix),
+      CONTRACT_ADDR,
       "https://api.example.com",
+      requested,
+      "did:example:agent1",
+      "https://github.com/example/agent",
+      "https://agent.example.com/api"
     );
     return await im.projectCount();
   }
 
-  // ── LP Deposit Flow ─────────────────────────────────────────────────────────
-  describe("Full LP Deposit Flow", function () {
-    it("LP deposits ETH and receives FundToken shares", async function () {
-      const depositAmount = ethers.parseEther("1");
-      const ftBefore = await ft.balanceOf(lp.address);
-      await fv.connect(lp).deposit({ value: depositAmount });
-      const ftAfter = await ft.balanceOf(lp.address);
+  async function approveProject(pid, score = 75n) {
+    await mockOracle.setResult(pid, score + 1n, 80, 75, 70, ZERO_HASH);
+    return im.settleAudit(pid);
+  }
 
-      expect(ftAfter).to.be.gt(ftBefore);
-      expect(ftAfter).to.equal(depositAmount); // 1:1 at launch
+  async function rejectProject(pid, score = 30n) {
+    await mockOracle.setResult(pid, score + 1n, 30, 30, 30, ZERO_HASH);
+    return im.settleAudit(pid);
+  }
+
+  // ── LP Deposit & Yield Flow ─────────────────────────────────────────────────
+  describe("Full LP Deposit Flow", function () {
+    it("LP deposits ETH and receives FundToken shares 1:1 at launch", async function () {
+      const depositAmount = ethers.parseEther("1");
+      await fv.connect(lp).deposit({ value: depositAmount });
+      expect(await ft.balanceOf(lp.address)).to.equal(depositAmount);
+      expect(await ft.getShares(lp.address)).to.equal(depositAmount);
     });
 
-    it("Vault holds aWETH after deposit", async function () {
+    it("Vault holds raw ETH after deposit (no AAVE wrapping)", async function () {
       const depositAmount = ethers.parseEther("1");
       await fv.connect(lp).deposit({ value: depositAmount });
-      expect(await aWeth.balanceOf(await fv.getAddress())).to.equal(depositAmount);
+      expect(await fv.vaultBalance()).to.equal(depositAmount);
     });
 
     it("FundToken balance grows when realized gains apply", async function () {
-      const depositAmount = ethers.parseEther("1");
-      await fv.connect(lp).deposit({ value: depositAmount });
+      await fv.connect(lp).deposit({ value: ethers.parseEther("1") });
 
-      const balanceBefore = await ft.balanceOf(lp.address);
-      await fv.connect(owner).addRealizedGains(ethers.parseEther("0.1"), 0);
-      const balanceAfter = await ft.balanceOf(lp.address);
+      const gain = ethers.parseEther("0.1");
+      await fv.connect(owner).addRealizedGains(gain, 0, { value: gain });
 
-      expect(balanceAfter).to.be.gt(balanceBefore);
+      // factor 1.0 → 1.1, balance 1 ETH → 1.1 ETH
+      expect(await ft.balanceOf(lp.address)).to.equal(ethers.parseEther("1.1"));
+    });
+
+    it("FundToken balance shrinks when realized losses apply", async function () {
+      await fv.connect(lp).deposit({ value: ethers.parseEther("1") });
+
+      await fv.connect(owner).addRealizedLoss(0, ethers.parseEther("0.2"));
+
+      // factor 1.0 → 0.8
+      expect(await ft.balanceOf(lp.address)).to.equal(ethers.parseEther("0.8"));
     });
   });
 
   // ── Project Audit Flow ──────────────────────────────────────────────────────
   describe("Project Application to Investment Flow", function () {
-    it("Project submitted → Auditing status", async function () {
+    it("Project submitted → Auditing status + oracle receives request", async function () {
       const pid = await submitProject();
       const p = await im.projects(pid);
       expect(p.status).to.equal(2); // Auditing
+      expect(await mockOracle.lastRequestedProjectId()).to.equal(pid);
     });
 
-    it("Oracle fulfills with score >= 8000 → PendingExecution + executionUnlocksAt set", async function () {
+    it("Oracle approves above threshold → PendingExecution + executionUnlocksAt set", async function () {
       const pid = await submitProject();
-      const tx = await im.connect(oracle).fulfillAudit(pid, 8500, 8000, 9000, ZERO_HASH, []);
+      const tx = await approveProject(pid, 85n);
       const receipt = await tx.wait();
       const block = await ethers.provider.getBlock(receipt.blockNumber);
 
       const p = await im.projects(pid);
       expect(p.status).to.equal(3); // PendingExecution
-      expect(p.auditScore).to.equal(8500);
-      expect(p.executionUnlocksAt).to.equal(BigInt(block.timestamp) + BigInt(DELAY));
+      expect(p.auditScore).to.equal(85);
+      expect(p.executionUnlocksAt).to.equal(BigInt(block.timestamp) + BigInt(EXECUTION_DELAY_SEC));
     });
 
-    it("Rejected project cannot be executed even after timelock", async function () {
+    it("Score below threshold → Rejected", async function () {
       const pid = await submitProject();
-      await im.connect(oracle).fulfillAudit(pid, 7500, 7000, 8000, ZERO_HASH, []);
-      await increaseTime(DELAY + 1);
+      await rejectProject(pid, 30n);
+      const p = await im.projects(pid);
+      expect(p.status).to.equal(4); // Rejected
+    });
 
-      await expect(
-        im.connect(oracle).executeInvestment(pid, ethers.parseEther("0.1"), "0x")
-      ).to.be.revertedWithCustomError(im, "InvalidStatus");
+    it("Oracle failure sentinel → Rejected with AuditFailed event", async function () {
+      const pid = await submitProject();
+      await mockOracle.setResult(pid, ethers.MaxUint256, 0, 0, 0, ZERO_HASH);
+      await expect(im.settleAudit(pid)).to.emit(im, "AuditFailed").withArgs(pid);
+      const p = await im.projects(pid);
+      expect(p.status).to.equal(4); // Rejected
     });
 
     it("executeInvestment reverts before timelock expires", async function () {
       const pid = await submitProject();
-      await im.connect(oracle).fulfillAudit(pid, 8500, 8000, 9000, ZERO_HASH, []);
-
+      await approveProject(pid);
       await expect(
-        im.connect(oracle).executeInvestment(pid, ethers.parseEther("0.1"), "0x")
+        im.executeInvestment(pid, ethers.parseEther("0.1"), "0x")
       ).to.be.revertedWithCustomError(im, "TimelockActive");
+    });
+
+    it("Rejected project cannot be executed even after timelock", async function () {
+      const pid = await submitProject();
+      await rejectProject(pid);
+      await increaseTime(EXECUTION_DELAY_SEC + 1);
+      await expect(
+        im.executeInvestment(pid, ethers.parseEther("0.1"), "0x")
+      ).to.be.revertedWithCustomError(im, "InvalidStatus");
     });
   });
 
-  // ── Veto Governance ─────────────────────────────────────────────────────────
-  describe("Veto Governance", function () {
-    it("RISK_AGENT vetoes during window → status = Vetoed", async function () {
+  // ── LP Veto Governance ──────────────────────────────────────────────────────
+  describe("LP Veto Governance", function () {
+    it("LP holding FundToken can veto during timelock → status = Vetoed", async function () {
+      await fv.connect(lp).deposit({ value: ethers.parseEther("1") });
       const pid = await submitProject();
-      await im.connect(oracle).fulfillAudit(pid, 9000, 8500, 9500, ZERO_HASH, []);
+      await approveProject(pid, 90n);
 
-      await im.connect(riskAgent).veto(pid, 1); // reason: prompt injection
+      await im.connect(lp).veto(pid);
 
       const p = await im.projects(pid);
       expect(p.status).to.equal(9); // Vetoed
     });
 
     it("Vetoed project cannot be executed after timelock", async function () {
+      await fv.connect(lp).deposit({ value: ethers.parseEther("1") });
       const pid = await submitProject();
-      await im.connect(oracle).fulfillAudit(pid, 9000, 8500, 9500, ZERO_HASH, []);
-      await im.connect(riskAgent).veto(pid, 1);
-      await increaseTime(DELAY + 1);
+      await approveProject(pid, 90n);
+      await im.connect(lp).veto(pid);
+      await increaseTime(EXECUTION_DELAY_SEC + 1);
 
       await expect(
-        im.connect(oracle).executeInvestment(pid, ethers.parseEther("1"), "0x")
+        im.executeInvestment(pid, ethers.parseEther("0.5"), "0x")
       ).to.be.revertedWithCustomError(im, "InvalidStatus");
     });
 
-    it("Cannot veto after timelock has expired", async function () {
+    it("Non-LP cannot veto", async function () {
       const pid = await submitProject();
-      await im.connect(oracle).fulfillAudit(pid, 9000, 8500, 9500, ZERO_HASH, []);
-      await increaseTime(DELAY + 1);
-
-      await expect(
-        im.connect(riskAgent).veto(pid, 1)
-      ).to.be.revertedWithCustomError(im, "TimelockExpired");
+      await approveProject(pid, 90n);
+      await expect(im.connect(other).veto(pid))
+        .to.be.revertedWithCustomError(im, "NotLP");
     });
 
-    it("Non-RISK_AGENT cannot veto", async function () {
+    it("Cannot veto after timelock has expired", async function () {
+      await fv.connect(lp).deposit({ value: ethers.parseEther("1") });
       const pid = await submitProject();
-      await im.connect(oracle).fulfillAudit(pid, 9000, 8500, 9500, ZERO_HASH, []);
+      await approveProject(pid, 90n);
+      await increaseTime(EXECUTION_DELAY_SEC + 1);
+
+      await expect(im.connect(lp).veto(pid))
+        .to.be.revertedWithCustomError(im, "TimelockExpired");
+    });
+  });
+
+  // ── Full Investment Pipeline (E2E) ──────────────────────────────────────────
+  describe("Full Investment Pipeline", function () {
+    it("deposit → submit → approve → timelock → execute → vest → exit with profit", async function () {
+      // 1. LP funds the vault
+      await fv.connect(lp).deposit({ value: ethers.parseEther("2") });
+
+      // 2. AI agent submits a project requesting 0.5 ETH
+      const invest = ethers.parseEther("0.5");
+      const pid = await submitProject("e2e", invest);
+      await approveProject(pid, 80n);
+
+      // 3. Timelock passes; anyone executes
+      await increaseTime(EXECUTION_DELAY_SEC + 1);
+      const applicantBefore = await ethers.provider.getBalance(applicant.address);
+      await im.connect(other).executeInvestment(pid, invest, "0x");
+      const applicantAfter = await ethers.provider.getBalance(applicant.address);
+
+      // 20% upfront to applicant, vault drained by invest amount
+      const upfront = invest * 2000n / 10000n;
+      expect(applicantAfter - applicantBefore).to.equal(upfront);
+      expect(await fv.vaultBalance()).to.equal(ethers.parseEther("1.5"));
+      expect(await ethers.provider.getBalance(await im.getAddress())).to.equal(invest - upfront);
+      expect((await im.projects(pid)).status).to.equal(5); // Active
+
+      // 4. Half the vesting period passes → applicant claims linear vesting
+      await increaseTime(26 * WEEK);
+      const claimable = await im.getClaimableAmount(pid);
+      // ~50% of linear part (0.4 × 0.5 = 0.2), small drift from elapsed blocks
+      expect(claimable).to.be.closeTo(ethers.parseEther("0.2"), ethers.parseEther("0.001"));
+
+      const beforeClaim = await ethers.provider.getBalance(applicant.address);
+      await im.connect(other).claimPayout(pid); // permissionless, pays applicant
+      const afterClaim = await ethers.provider.getBalance(applicant.address);
+      expect(afterClaim - beforeClaim).to.be.closeTo(claimable, ethers.parseEther("0.001"));
+
+      // 5. Admin records a profitable exit (+20%) → LP balances rebase upward
+      const lpBefore = await ft.balanceOf(lp.address);
+      await im.simulateExit(pid, 12000);
+      const lpAfter = await ft.balanceOf(lp.address);
+
+      expect((await im.projects(pid)).status).to.equal(7); // Exited
+      expect(lpAfter).to.be.gt(lpBefore);
+      // net gain 0.1 ETH over 2 ETH of shares → factor 1.05 → balance 2.1
+      expect(lpAfter).to.equal(ethers.parseEther("2.1"));
+    });
+
+    it("amount above audited requestedAmount is rejected", async function () {
+      await fv.connect(lp).deposit({ value: ethers.parseEther("2") });
+      const pid = await submitProject("cap", ethers.parseEther("0.5"));
+      await approveProject(pid);
+      await increaseTime(EXECUTION_DELAY_SEC + 1);
 
       await expect(
-        im.connect(applicant).veto(pid, 1)
-      ).to.be.revertedWithCustomError(im, "AccessControlUnauthorizedAccount");
+        im.executeInvestment(pid, ethers.parseEther("1"), "0x")
+      ).to.be.revertedWithCustomError(im, "AmountExceedsRequested");
+    });
+  });
+
+  // ── Risk Management ─────────────────────────────────────────────────────────
+  describe("Risk Management", function () {
+    it("RiskAgent can trigger circuit break on Auditing project", async function () {
+      const pid = await submitProject();
+      await im.connect(riskAgent).triggerCircuitBreak(pid);
+      expect((await im.projects(pid)).status).to.equal(6); // CircuitBroken
+    });
+
+    it("Circuit break on Active project freezes vesting claims", async function () {
+      await fv.connect(lp).deposit({ value: ethers.parseEther("1") });
+      const pid = await submitProject();
+      await approveProject(pid);
+      await increaseTime(EXECUTION_DELAY_SEC + 1);
+      await im.executeInvestment(pid, ethers.parseEther("0.5"), "0x");
+
+      await increaseTime(4 * WEEK);
+      expect(await im.getClaimableAmount(pid)).to.be.gt(0n);
+
+      await im.connect(riskAgent).triggerCircuitBreak(pid);
+
+      expect(await im.getClaimableAmount(pid)).to.equal(0n);
+      await expect(im.claimPayout(pid))
+        .to.be.revertedWithCustomError(im, "InvalidStatus");
     });
   });
 
@@ -242,164 +346,36 @@ describe("Cross-Contract Integration", function () {
   // ── Multi-Project Scenarios ─────────────────────────────────────────────────
   describe("Multi-Project Scenarios", function () {
     it("Multiple projects can be in different states simultaneously", async function () {
-      // Project 1: PendingExecution (score >= 8000)
+      await fv.connect(lp).deposit({ value: ethers.parseEther("1") });
+
+      // Project 1: PendingExecution
       const pid1 = await submitProject("commit1");
-      await im.connect(oracle).fulfillAudit(pid1, 8500, 8000, 9000, ZERO_HASH, []);
+      await approveProject(pid1, 85n);
 
       // Project 2: Rejected
       const pid2 = await submitProject("commit2");
-      await im.connect(oracle).fulfillAudit(pid2, 6000, 5500, 6500, ZERO_HASH, []);
+      await rejectProject(pid2, 40n);
 
       // Project 3: Auditing
       const pid3 = await submitProject("commit3");
 
       // Project 4: Vetoed
       const pid4 = await submitProject("commit4");
-      await im.connect(oracle).fulfillAudit(pid4, 8200, 7800, 8600, ZERO_HASH, []);
-      await im.connect(riskAgent).veto(pid4, 2);
+      await approveProject(pid4, 82n);
+      await im.connect(lp).veto(pid4);
 
-      const p1 = await im.projects(pid1);
-      const p2 = await im.projects(pid2);
-      const p3 = await im.projects(pid3);
-      const p4 = await im.projects(pid4);
-
-      expect(p1.status).to.equal(3); // PendingExecution
-      expect(p2.status).to.equal(4); // Rejected
-      expect(p3.status).to.equal(2); // Auditing
-      expect(p4.status).to.equal(9); // Vetoed
-    });
-  });
-
-  // ── Risk Management ─────────────────────────────────────────────────────────
-  describe("Risk Management", function () {
-    it("RiskAgent can trigger circuit break on Auditing project", async function () {
-      const pid = await submitProject();
-      await im.connect(riskAgent).triggerCircuitBreak(pid, 1);
-
-      const p = await im.projects(pid);
-      expect(p.status).to.equal(6); // CircuitBroken
-    });
-  });
-
-  // ── AgentVoting Integration ──────────────────────────────────────────────────
-  describe("AgentVoting Integration", function () {
-    let registry, av, agent1, agent2, agent3;
-
-    beforeEach(async function () {
-      const signers = await hre.ethers.getSigners();
-      agent1 = signers[5];
-      agent2 = signers[6];
-      agent3 = signers[7];
-
-      const R = await hre.ethers.getContractFactory("AgentRegistry");
-      registry = await R.deploy();
-      await registry.waitForDeployment();
-      await registry.addAgent(agent1.address);
-      await registry.addAgent(agent2.address);
-      await registry.addAgent(agent3.address);
-
-      const AV = await hre.ethers.getContractFactory("AgentVoting");
-      av = await AV.deploy(
-        await registry.getAddress(),
-        await im.getAddress(),
-        await ft.getAddress()
-      );
-      await av.waitForDeployment();
-
-      // Grant AgentVoting the AI_ORACLE_ROLE
-      await im.grantRole(await im.AI_ORACLE_ROLE(), await av.getAddress());
-    });
-
-    async function submitProject(suffix = "commit") {
-      await im.connect(applicant).submitProject(
-        hre.ethers.id(suffix),
-        "0x1234567890123456789012345678901234567890",
-        "https://api.example.com"
-      );
-      return await im.projectCount();
-    }
-
-    it("unanimous approve + community window passes → PendingExecution", async function () {
-      const pid = await submitProject("av-approve");
-      const h = hre.ethers.id("reasoning");
-
-      await av.connect(agent1).agentVote(pid, true, 8500, 8000, 9000, h);
-      await av.connect(agent2).agentVote(pid, true, 8500, 8000, 9000, h);
-      await av.connect(agent3).agentVote(pid, true, 8500, 8000, 9000, h);
-
-      await increaseTime(COMMUNITY_WINDOW + 1);
-      await av.triggerExecution(pid);
-
-      const p = await im.projects(pid);
-      expect(p.status).to.equal(3); // PendingExecution
-    });
-
-    it("any agent rejects → Rejected immediately", async function () {
-      const pid = await submitProject("av-reject");
-      const h = hre.ethers.id("reasoning");
-
-      await av.connect(agent1).agentVote(pid, true, 8500, 8000, 9000, h);
-      await av.connect(agent2).agentVote(pid, false, 4000, 3500, 4500, h);
-
-      const p = await im.projects(pid);
-      expect(p.status).to.equal(4); // Rejected
-    });
-
-    it("LP community veto → Rejected", async function () {
-      const pid = await submitProject("av-community");
-      const h = hre.ethers.id("reasoning");
-
-      // LP gets >1% FundToken
-      await fv.connect(lp).deposit({ value: ethers.parseEther("1") });
-
-      await av.connect(agent1).agentVote(pid, true, 9000, 8500, 9500, h);
-      await av.connect(agent2).agentVote(pid, true, 9000, 8500, 9500, h);
-      await av.connect(agent3).agentVote(pid, true, 9000, 8500, 9500, h);
-
-      await av.connect(lp).communityVeto(pid);
-
-      const p = await im.projects(pid);
-      expect(p.status).to.equal(4); // Rejected
-    });
-
-    it("full pipeline: 3 agents → window → PendingExecution → 72h → executeInvestment", async function () {
-      const pid = await submitProject("av-full");
-      const h = hre.ethers.id("reasoning");
-
-      // Fund vault
-      await fv.connect(lp).deposit({ value: ethers.parseEther("5") });
-      await hre.network.provider.request({
-        method: "hardhat_setBalance",
-        params: [await fv.getAddress(), "0x" + ethers.parseEther("10").toString(16)],
-      });
-
-      await av.connect(agent1).agentVote(pid, true, 9000, 8500, 9500, h);
-      await av.connect(agent2).agentVote(pid, true, 9000, 8500, 9500, h);
-      await av.connect(agent3).agentVote(pid, true, 9000, 8500, 9500, h);
-
-      await increaseTime(COMMUNITY_WINDOW + 1);
-      await av.triggerExecution(pid);
-
-      await increaseTime(DELAY + 1);
-      // Permissionless — owner (anyone) calls it
-      await im.connect(owner).executeInvestment(pid, ethers.parseEther("1"), "0x");
-
-      const p = await im.projects(pid);
-      expect(p.status).to.equal(5); // Active
+      expect((await im.projects(pid1)).status).to.equal(3); // PendingExecution
+      expect((await im.projects(pid2)).status).to.equal(4); // Rejected
+      expect((await im.projects(pid3)).status).to.equal(2); // Auditing
+      expect((await im.projects(pid4)).status).to.equal(9); // Vetoed
     });
   });
 
   // ── End-to-End ETH Round Trip ───────────────────────────────────────────────
   describe("End-to-End ETH Round Trip", function () {
-    it("LP deposit → vault holds aWETH → LP redeems all → ETH returned", async function () {
+    it("LP deposit → vault holds ETH → LP redeems all → exact ETH returned", async function () {
       const depositAmount = ethers.parseEther("1");
       await fv.connect(lp).deposit({ value: depositAmount });
-
-      const vaultAddr = await fv.getAddress();
-      await hre.network.provider.request({
-        method: "hardhat_setBalance",
-        params: [vaultAddr, "0x" + ethers.parseEther("5").toString(16)],
-      });
 
       const shares = await ft.getShares(lp.address);
       const ethBefore = await ethers.provider.getBalance(lp.address);
@@ -409,9 +385,25 @@ describe("Cross-Contract Integration", function () {
       const gasCost = receipt.gasUsed * receipt.gasPrice;
       const ethAfter = await ethers.provider.getBalance(lp.address);
 
-      const received = ethAfter - ethBefore + gasCost;
-      expect(received).to.equal(depositAmount);
+      expect(ethAfter - ethBefore + gasCost).to.equal(depositAmount);
       expect(await ft.getShares(lp.address)).to.equal(0n);
+    });
+
+    it("LP redeems deposit plus realized yield", async function () {
+      await fv.connect(lp).deposit({ value: ethers.parseEther("1") });
+
+      const gain = ethers.parseEther("0.1");
+      await fv.connect(owner).addRealizedGains(gain, 0, { value: gain });
+
+      const shares = await ft.getShares(lp.address);
+      const ethBefore = await ethers.provider.getBalance(lp.address);
+
+      const tx = await fv.connect(lp).redeem(shares);
+      const receipt = await tx.wait();
+      const gasCost = receipt.gasUsed * receipt.gasPrice;
+      const ethAfter = await ethers.provider.getBalance(lp.address);
+
+      expect(ethAfter - ethBefore + gasCost).to.equal(ethers.parseEther("1.1"));
     });
   });
 });

@@ -25,5 +25,8 @@
     "@types/react-dom": "^18",
     "playwright": "^1.59.1",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }

@@ -30,6 +30,7 @@ export default function Home() {
     abi: fundTokenAbi,
     functionName: 'balanceOf',
     args: [address as `0x${string}`],
+    chainId: contractChainId,
     query: { enabled: !!address },
   });
   const userFtBalance = rawFtBalance

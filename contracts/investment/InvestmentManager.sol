@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { IFundVault } from "../interfaces/IFundVault.sol";
 
 /// @dev OmniOracle interface — stores 3-dimensional AI audit scores
@@ -38,7 +39,7 @@ interface IOmniOracle {
 ///   reliability 40% — agent uptime, latency, error rate
 ///   quality     30% — code / output quality
 ///   marketFit   30% — business / market-fit signal
-contract InvestmentManager is AccessControl {
+contract InvestmentManager is AccessControl, ReentrancyGuard {
     // ─── Roles ───────────────────────────────────────────────────────────────
     bytes32 public constant AI_ORACLE_ROLE  = keccak256("AI_ORACLE_ROLE");
     bytes32 public constant RISK_AGENT_ROLE = keccak256("RISK_AGENT_ROLE");
@@ -138,6 +139,7 @@ contract InvestmentManager is AccessControl {
     error OracleNotSet();
     error InvalidThreshold();
     error NotLP();
+    error AmountExceedsRequested();
 
     // ─── Constructor ────────────────────────────────────────────────────────
     constructor(address _fundVault, uint256 _scoreThreshold) {
@@ -258,37 +260,43 @@ contract InvestmentManager is AccessControl {
 
     // ─── Execute Investment ──────────────────────────────────────────────────
     /// @notice Permissionless after timelock. Vault sends ETH directly (no WETH needed).
+    ///         Amount is capped to the project's requestedAmount (audited scope).
     function executeInvestment(
         uint256 projectId,
         uint256 amount,
         bytes   calldata vestingSchedule
-    ) external {
+    ) external nonReentrant {
         Project storage p = projects[projectId];
         if (p.status != ProjectStatus.PendingExecution) revert InvalidStatus();
         if (block.timestamp < uint256(p.executionUnlocksAt)) revert TimelockActive();
         if (amount == 0) revert ZeroAmount();
-
-        // Vault sends ETH directly to InvestmentManager (no WETH unwrap needed)
-        fundVault.divestForInvestment(amount);
+        if (amount > p.requestedAmount) revert AmountExceedsRequested();
 
         uint256 upfront = amount * UPFRONT_BPS / 10_000;
-        (bool ok, ) = p.applicant.call{value: upfront}("");
-        if (!ok) revert TransferFailed();
 
+        // Effects before interactions (CEI): status leaves PendingExecution
+        // before any external call, closing the reentrancy window.
         p.investmentAmount = amount;
         p.releasedAmount   = upfront;
         p.investedAt       = uint40(block.timestamp);
         p.status           = ProjectStatus.Active;
         vestingSchedules[projectId] = vestingSchedule;
 
+        // Vault sends ETH directly to InvestmentManager (no WETH unwrap needed)
+        fundVault.divestForInvestment(amount);
+
+        (bool ok, ) = p.applicant.call{value: upfront}("");
+        if (!ok) revert TransferFailed();
+
         emit InvestmentExecuted(projectId, amount, upfront);
     }
 
     // ─── Vesting Payout ─────────────────────────────────────────────────────
-    function claimPayout(uint256 projectId) external {
+    /// @notice Vesting claims are frozen while a project is CircuitBroken —
+    ///         funds only leave via admin exit / write-off paths.
+    function claimPayout(uint256 projectId) external nonReentrant {
         Project storage p = projects[projectId];
-        if (p.status != ProjectStatus.Active && p.status != ProjectStatus.CircuitBroken)
-            revert InvalidStatus();
+        if (p.status != ProjectStatus.Active) revert InvalidStatus();
 
         uint256 claimable = getClaimableAmount(projectId);
         if (claimable == 0) revert ZeroAmount();
@@ -302,7 +310,7 @@ contract InvestmentManager is AccessControl {
 
     function getClaimableAmount(uint256 projectId) public view returns (uint256) {
         Project memory p = projects[projectId];
-        if (p.status != ProjectStatus.Active && p.status != ProjectStatus.CircuitBroken) return 0;
+        if (p.status != ProjectStatus.Active) return 0;
         if (p.investedAt == 0) return 0;
 
         uint256 total      = p.investmentAmount;

@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { formatEther } from 'viem';
 import { useProjects } from '../hooks/useProjects';
 import { useReadContract } from 'wagmi';
-import { nfaAddress, nfaAbi } from '../hooks/contracts';
+import { nfaAddress, nfaAbi, contractChainId } from '../hooks/contracts';
 
 /* ── Deterministic pixel avatar (same algo as agent-sim) ───────────────────── */
 function AgentAvatar({ id, color, size = 28 }: { id: number; color: string; size?: number }) {
@@ -148,6 +148,7 @@ export default function AgentNetworkSection() {
   // Total NFA supply
   const { data: totalNFA } = useReadContract({
     address: nfaAddress, abi: nfaAbi, functionName: 'totalSupply',
+    chainId: contractChainId,
     query: { refetchInterval: 30_000 },
   });
   const totalAgents = totalNFA ? Number(totalNFA as bigint) : 0;

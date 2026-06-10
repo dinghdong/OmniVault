@@ -33,6 +33,11 @@ contract DeadManSwitch is AccessControl {
 
     mapping(uint256 => ProjectWatch) public watches;
 
+    /// @notice InvestmentManager that receives the write-off call when a switch fires.
+    ///         This contract must hold RISK_AGENT_ROLE on it. Zero = standalone mode
+    ///         (trigger only emits the event, no on-chain write-off).
+    IInvestmentManager public investmentManager;
+
     // ─── Events ──────────────────────────────────────────────────────────────
     event ProjectRegistered(uint256 indexed projectId, uint256 deadline);
     event PingReceived(uint256 indexed projectId, bytes32 commitHash, address pinger, uint256 pingCount);
@@ -49,6 +54,13 @@ contract DeadManSwitch is AccessControl {
     constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(REGISTRAR_ROLE, msg.sender);
+    }
+
+    // ─── Admin wiring ────────────────────────────────────────────────────────
+    /// @notice Link the InvestmentManager so triggerDeadSwitch() can write off
+    ///         the project on-chain. Grant this contract RISK_AGENT_ROLE there.
+    function setInvestmentManager(address _im) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        investmentManager = IInvestmentManager(_im);
     }
 
     // ─── Registration ─────────────────────────────────────────────────────────
@@ -82,7 +94,8 @@ contract DeadManSwitch is AccessControl {
 
     // ─── Dead-man trigger ───────────────────────────────────────────────────
     /// @notice Anyone can call this if the project has been silent for > PING_WINDOW + GRACE_PERIOD.
-    ///         Deactivates the watch so it can only be triggered once.
+    ///         Deactivates the watch so it can only be triggered once, then writes the
+    ///         project off in the InvestmentManager (socializing the loss to LPs).
     function triggerDeadSwitch(uint256 projectId) external {
         ProjectWatch storage w = watches[projectId];
         if (!w.active) revert AlreadyTriggered();
@@ -91,6 +104,10 @@ contract DeadManSwitch is AccessControl {
         if (block.timestamp < deadline) revert StillAlive();
 
         w.active = false;
+
+        if (address(investmentManager) != address(0)) {
+            investmentManager.markWriteOff(projectId);
+        }
 
         uint256 daysSilent = (block.timestamp - w.lastPingAt) / 1 days;
         emit DeadSwitchTriggered(projectId, msg.sender, daysSilent);
