@@ -46,33 +46,102 @@ OmniVault removes human bias from venture capital. AI agents conduct independent
 
 ## Architecture
 
+```mermaid
+flowchart LR
+    LP(["👤 LP"])
+    AGENT(["🤖 AI Agent<br/>(A2A)"])
+    PROJ(["📦 Funded<br/>Project"])
+
+    subgraph FE["🖥 Frontend — Next.js 14 · wagmi v2"]
+        UI["LP Dashboard · Audit Pipeline<br/>A2A Apply · Audit Detail · Agent Sim"]
+    end
+
+    subgraph L2["⛓ Arbitrum (Sepolia 421614)"]
+        subgraph CAP["💰 Capital"]
+            FV["<b>FundVault</b><br/>ETH custody"]
+            FT["<b>FundToken</b> OVFT<br/>balance = shares × accrualFactor"]
+        end
+        subgraph PIPE["📋 Pipeline"]
+            IM["<b>InvestmentManager</b><br/>timelock · LP veto<br/>20% upfront · 52w vesting"]
+            DMS["<b>DeadManSwitch</b><br/>30d ping + 30d grace"]
+        end
+        subgraph AIL["🧠 AI & Identity"]
+            OO["<b>OmniOracle</b><br/>Chainlink Functions client"]
+            NFA["<b>NonFungibleAgent</b><br/>did:nfa:chain:contract:id"]
+        end
+        subgraph SUP["🛡 Verifiability & Revenue"]
+            SE["<b>ScoringEngine</b> · Stylus Rust<br/>40/30/30 · threshold 60"]
+            AT["<b>AuditTrail</b> · <b>PromptRegistry</b><br/>hash + prompt commitments"]
+            RS["<b>RevenueShare</b><br/>O(1) → AI agents"]
+        end
+    end
+
+    subgraph OFF["☁️ Trustless Off-chain"]
+        DON["<b>Chainlink DON</b><br/>audit-source.js<br/>DON-hosted secrets"]
+        ZGC["<b>0G Compute</b><br/>TeeML LLM inference"]
+        ZGS["<b>0G Storage</b><br/>immutable audit logs"]
+    end
+
+    LP -->|"deposit / redeem / veto"| UI
+    AGENT -->|"mint DID · submitProject"| UI
+    UI --> FV
+    UI --> IM
+    UI --> NFA
+
+    FV -->|"mint / burn · rebase"| FT
+    FV -->|"divestForInvestment"| IM
+    IM -->|"20% upfront + claimPayout"| PROJ
+    PROJ -->|"exit proceeds → applyYield/Loss"| FV
+
+    IM -->|"requestAudit"| OO
+    OO -->|"CBOR request"| DON
+    DON <-->|"3D audit prompt / scores"| ZGC
+    DON -->|"160B: score + 3D + contentHash"| OO
+    OO -.->|"settleAudit (permissionless)"| IM
+    DMS -->|"missed pings → markWriteOff"| IM
+    ZGC -.->|"full audit log"| ZGS
+
+    OO ~~~ SE
+    OO ~~~ AT
+    IM ~~~ RS
+
+    classDef actor fill:#0b3d2e,stroke:#00ff88,color:#fff
+    class LP,AGENT,PROJ actor
+
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                      Frontend  (Next.js 14)                       │
-│  LP Dashboard │ AI Audit Pipeline │ Apply (A2A) │ Portfolio       │
-└──────────────────────────┬───────────────────────────────────────┘
-               wagmi v2 / viem / ConnectKit
-┌──────────────────────────▼───────────────────────────────────────┐
-│                    Arbitrum (Sepolia / One)                        │
-│                                                                   │
-│  ┌──────────────┐  ┌──────────────┐  ┌───────────────────────┐   │
-│  │  FundVault   │  │  FundToken   │  │  InvestmentManager    │   │
-│  │  ETH-only    │  │  Rebasing    │  │  Project lifecycle    │   │
-│  │  no AAVE     │  │  ERC-20      │  │  settleAudit / exec   │   │
-│  └──────────────┘  └──────────────┘  └───────────────────────┘   │
-│  ┌──────────────┐  ┌──────────────┐  ┌───────────────────────┐   │
-│  │  OmniOracle  │  │ScoringEngine │  │   RevenueShare        │   │
-│  │  Chainlink   │  │Arbitrum      │  │   MasterChef O(1)     │   │
-│  │  Functions   │  │Stylus (Rust) │  │   distribution        │   │
-│  └──────────────┘  └──────────────┘  └───────────────────────┘   │
-└──────────────────────────┬───────────────────────────────────────┘
-         Chainlink DON → audit-source.js
-┌──────────────────────────▼───────────────────────────────────────┐
-│                      0G Network / External                         │
-│  0G Compute  (DeepSeek-V3 / Qwen3 — AI scoring inference)        │
-│  0G Storage  (immutable audit report archives)                    │
-│  Chainlink Functions DON (trustless off-chain compute)            │
-└──────────────────────────────────────────────────────────────────┘
+
+### Investment Lifecycle
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as 🤖 AI Agent
+    participant IM as InvestmentManager
+    participant OO as OmniOracle
+    participant DON as Chainlink DON
+    participant ZG as 0G Compute (TeeML)
+    participant LP as 👤 LPs
+    participant FV as FundVault
+
+    A->>IM: submitProject(commitHash, bizApi, amount, DID, repo, endpoint)
+    IM->>OO: requestAudit(projectId)
+    OO->>DON: Functions request (DON-hosted secrets)
+    DON->>ZG: 3-dimension A2A audit prompt
+    ZG-->>DON: reliability / quality / marketFit + findings
+    DON-->>OO: 160B response (finalScore + 3D + contentHash)
+    Note over OO: fulfilledScore = score + 1 (sentinel encoding)
+    A->>IM: settleAudit(projectId) — permissionless
+    alt finalScore ≥ 60
+        IM->>IM: PendingExecution (timelock starts)
+        opt veto window
+            LP->>IM: veto(projectId) → Vetoed (any LP)
+        end
+        A->>IM: executeInvestment(amount ≤ requestedAmount)
+        IM->>FV: divestForInvestment(amount)
+        IM-->>A: 20% upfront · rest vests linearly over 52 weeks
+    else finalScore < 60
+        IM->>IM: Rejected
+    end
 ```
 
 ---

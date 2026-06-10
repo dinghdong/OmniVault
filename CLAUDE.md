@@ -43,25 +43,30 @@ npx hardhat run scripts/deploy-and-test.ts --network localhost
 ## Architecture
 
 ```
-Frontend (Next.js/wagmi) ──► Blockchain (Arbitrum) ──► AI Service Layer
-     │                              │                       │
-  ConnectKit/wagmi v2         FundVault (AAVE V3)    Multi-Agent Orchestrator
-  @tanstack/react-query       FundToken (rebasing)  CodeAnalysisAgent
-  Zustand                     InvestmentManager      RiskAssessmentAgent
-                              OmniOracle (Chainlink) BusinessAnalysisAgent
+Frontend (Next.js/wagmi) ──► Arbitrum L2 ──────────────► Trustless Off-chain
+     │                            │                            │
+  ConnectKit/wagmi v2      FundVault (ETH-only)         Chainlink Functions DON
+  @tanstack/react-query    FundToken (rebasing OVFT)    └─ chainlink/audit-source.js
+                           InvestmentManager            0G Compute (TeeML LLM, 3D scores)
+                           OmniOracle (CL Functions)    0G Storage (audit logs)
+                           ScoringEngine (Stylus/Rust)
+                           NFA · DeadManSwitch · RevenueShare
 ```
 
 ### Smart Contracts (`contracts/`)
 
 | Contract | Purpose |
 |----------|---------|
-| `vault/FundVault.sol` | LP deposits ETH, wraps→WETH→AAVE, redeem by shares, role-based access |
+| `vault/FundVault.sol` | LP deposits raw ETH (no AAVE/WETH), redeem by shares, `divestForInvestment`, P&L via `addRealizedGains/Loss` |
 | `vault/FundToken.sol` | Rebasing ERC-20 (aToken-like). `balanceOf = shares × accrualFactor`. Use `getShares()` for raw share count. |
-| `investment/InvestmentManager.sol` | Project applications, audit workflow, investment execution, vesting |
-| `oracle/OmniOracle.sol` | Chainlink Functions client for AI audit requests |
-| `oracle/MPCGateway.sol` | API key management and rate limiting |
+| `investment/InvestmentManager.sol` | Project lifecycle: submit → settleAudit → timelock + LP veto → execute (20% upfront, 52w vesting) → exit/write-off |
+| `oracle/OmniOracle.sol` | Chainlink Functions client; stores 3D scores + contentHash via sentinel encoding (`score+1`) |
+| `identity/NonFungibleAgent.sol` | ERC-721 agent identity, on-chain DID: `did:nfa:{chainId}:{contract}:{tokenId}` |
+| `governance/DeadManSwitch.sol` | Proof-of-life pings (30d + 30d grace); missed → `markWriteOff` on InvestmentManager |
+| `revenue/RevenueShare.sol` | O(1) MasterChef-style ETH distribution to registered AI agents |
 | `registry/PromptRegistry.sol` | On-chain prompt hash commitments |
 | `audit/AuditTrail.sol` | Records AI audit decisions on-chain |
+| `stylus/scoring-engine/` | Arbitrum Stylus (Rust→WASM) verifiable scoring: 40/30/30 weights, threshold 60 |
 
 ### Mock Contracts (`contracts/test/mocks/`)
 
