@@ -3,13 +3,13 @@ import WalletButton from '../components/WalletButton';
 import Modal from '../components/Modal';
 import DepositModal from '../components/DepositModal';
 import WithdrawModal from '../components/WithdrawModal';
-import ApplyModal from '../components/ApplyModal';
 import ProjectsSection from '../components/ProjectsSection';
+import AgentNetworkSection from '../components/AgentNetworkSection';
 import LPDashboard from '../components/LPDashboard';
 import { useAccount, useChainId, useSwitchChain } from 'wagmi';
 import { useReadContract } from 'wagmi';
 import { contractChainId, explorerUrl,
-  fundVaultAddress, investmentManagerAddress, omniOracleAddress } from '../hooks/contracts';
+  fundVaultAddress, investmentManagerAddress, omniOracleAddress, nfaAddress } from '../hooks/contracts';
 import { useState } from 'react';
 import { formatUnits } from 'viem';
 import { useVaultStats } from '../hooks/useVaultStats';
@@ -22,7 +22,6 @@ export default function Home() {
   const isWrongChain = isConnected && chainId !== contractChainId;
   const [depositOpen, setDepositOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
-  const [applyOpen, setApplyOpen] = useState(false);
   const { tvl, tvlChange, projectCount, aiScoreThreshold, isLoading, isConfigured } = useVaultStats();
 
   // Real-time FundToken balance for connected wallet
@@ -41,7 +40,7 @@ export default function Home() {
     <main>
       {isWrongChain && (
         <div className="wrong-chain-topbar">
-          ⚠️ Please switch to Ethereum Sepolia (chainId {contractChainId}) to interact.
+          ⚠️ Please switch to Arbitrum Sepolia (chainId {contractChainId}) to interact.
           <button onClick={() => switchChain({ chainId: contractChainId })}>
             Switch Network
           </button>
@@ -61,7 +60,7 @@ export default function Home() {
             <a href="#features">Features</a>
             <a href="#pipeline">Pipeline</a>
             <a href="#portfolio">Portfolio</a>
-            <a href="#apply">Apply</a>
+            <a href="#apply">Agents</a>
           </div>
           <div className={`nav-connect${isConnected ? ' nav-connect--active' : ' nav-connect--idle'}`}>
             <WalletButton />
@@ -73,19 +72,19 @@ export default function Home() {
         <div className="hero-content">
           <div className="badge">
             <span className="badge-dot"></span>
-            AI-Powered Decentralized VC · Built on 0G
+            A2A Protocol · Arbitrum · 0G · Chainlink
           </div>
           <h1 className="hero-title">
             The Future of<br />
             <span className="text-gradient">Web3 Investment</span>
           </h1>
           <p className="hero-subtitle">
-            OmniVault is a decentralized venture capital fund powered by multi-agent AI auditing.
-            LP deposits earn yield via AAVE while AI agents audit projects 24/7.
+            OmniVault is an autonomous AI agent network for decentralized venture capital.
+            Non-Fungible Agents discover, evaluate, and fund Web3 projects 24/7 — fully on-chain.
           </p>
           <div className="hero-actions">
             <a href="#portfolio" className="btn-primary">Start Investing</a>
-            <a href="#how-it-works" className="btn-secondary">Learn More</a>
+            <a href="#apply" className="btn-secondary">Agent Network</a>
           </div>
         </div>
         <div className="hero-visual">
@@ -118,7 +117,7 @@ export default function Home() {
           <div className="stat-card">
             <div className="stat-value">{isLoading ? '...' : !isConfigured ? '--' : tvlChange}</div>
             <div className="stat-label">Cumulative Yield</div>
-            <div className="stat-change positive">{isConfigured ? 'AAVE v3 rebasing' : ''}</div>
+            <div className="stat-change positive">{isConfigured ? 'investment rebasing' : ''}</div>
           </div>
 
           {/* 4. AI Approval Score — from InvestmentManager.SCORE_THRESHOLD */}
@@ -161,7 +160,7 @@ export default function Home() {
       <section className="features-section" id="features">
         <div className="section-header centered">
           <h2 className="section-title">Why OmniVault?</h2>
-          <p className="section-subtitle">The next generation of decentralized venture capital</p>
+          <p className="section-subtitle">The first autonomous A2A investment protocol on Arbitrum</p>
         </div>
         <div className="features-grid">
           <div className="feature-card">
@@ -171,8 +170,8 @@ export default function Home() {
                 <path d="M2 17L12 22L22 17M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
               </svg>
             </div>
-            <h3>AI-Powered Due Diligence</h3>
-            <p>Multi-agent AI system analyzes smart contract code, tokenomics, and business models automatically.</p>
+            <h3>A2A Protocol</h3>
+            <p>Autonomous AI agents with on-chain NFA identity discover and submit Web3 projects with no human gatekeepers. Agent-to-agent consensus via Chainlink Functions.</p>
           </div>
           <div className="feature-card">
             <div className="feature-icon feature-icon-purple">
@@ -182,7 +181,7 @@ export default function Home() {
               </svg>
             </div>
             <h3>Secure Asset Management</h3>
-            <p>Funds supplied to AAVE for risk-free yield. Smart contracts audited and transparent.</p>
+            <p>ETH held directly in vault on Arbitrum. AI-managed investments with timelock and LP veto window. Smart contracts fully on-chain and verifiable.</p>
           </div>
           <div className="feature-card">
             <div className="feature-icon feature-icon-pink">
@@ -190,8 +189,8 @@ export default function Home() {
                 <path d="M12 8V12L15 15M21 12C21 16.97 16.97 21 12 21C7.03 21 3 16.97 3 12C3 7.03 7.03 3 12 3C16.97 3 21 7.03 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </div>
-            <h3>Real-Time Monitoring</h3>
-            <p>24/7 surveillance of funded projects. Automatic circuit breakers for risk events.</p>
+            <h3>3D Scoring Engine</h3>
+            <p>Reliability · Quality · Market Fit — three independent dimensions scored by Stylus smart contracts. Weighted consensus determines investment approval.</p>
           </div>
           <div className="feature-card">
             <div className="feature-icon feature-icon-blue">
@@ -200,7 +199,7 @@ export default function Home() {
               </svg>
             </div>
             <h3>Fair LP Distribution</h3>
-            <p>Rebasing token model ensures fair yield distribution proportional to shareholding.</p>
+            <p>Rebasing FundToken model ensures yield distribution proportional to LP shareholding. Revenue share MasterChef-style per contributing agent.</p>
           </div>
         </div>
       </section>
@@ -208,49 +207,8 @@ export default function Home() {
       {/* ── AI Audit Pipeline ─────────────────────────────────────────────── */}
       <ProjectsSection />
 
-      {/* ── Apply for Funding ─────────────────────────────────────────────── */}
-      <section className="apply-section" id="apply">
-        <div className="apply-section-inner">
-          <div className="apply-section-text">
-            <div className="badge" style={{ marginBottom: '1.25rem' }}>
-              <span className="badge-dot" />
-              AI-Powered Due Diligence
-            </div>
-            <h2 className="section-title">Apply for Funding</h2>
-            <p className="section-subtitle" style={{ marginTop: '0.75rem' }}>
-              Submit your Web3 project to OmniVault's multi-agent AI audit pipeline.
-              Code, risk, and business model are analyzed autonomously — no human gatekeepers.
-            </p>
-            <div className="apply-checklist">
-              <div className="apply-check-item">
-                <span className="apply-check-icon">✦</span>
-                <span>3 independent AI agents audit your pitch deck &amp; code</span>
-              </div>
-              <div className="apply-check-item">
-                <span className="apply-check-icon">✦</span>
-                <span>Audit reports stored on 0G Storage · Merkle proof on-chain</span>
-              </div>
-              <div className="apply-check-item">
-                <span className="apply-check-icon">✦</span>
-                <span>48h LP community veto window before any funds move</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="apply-section-form">
-            <div className="modal-content open" style={{ position: 'relative', maxWidth: 420, width: '100%' }}>
-              <div className="modal-header">
-                <h3 className="modal-title">Project Application</h3>
-                <div className="apply-status-badge">
-                  <span className="badge-dot" />
-                  Open
-                </div>
-              </div>
-              <ApplyModal />
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* ── Agent Network ─────────────────────────────────────────────────── */}
+      <AgentNetworkSection />
 
       <section className="how-it-works" id="how-it-works">
         <div className="section-header centered">
@@ -262,15 +220,15 @@ export default function Home() {
             <div className="step-number">01</div>
             <div className="step-content">
               <h3>Deposit ETH</h3>
-              <p>Connect your wallet and deposit ETH. Your funds are held in the vault to earn yield from investments.</p>
+              <p>Connect your wallet and deposit ETH. Your funds are held in the AI-managed vault.</p>
             </div>
           </div>
           <div className="step-connector"></div>
           <div className="step">
             <div className="step-number">02</div>
             <div className="step-content">
-              <h3>AI Audits Projects</h3>
-              <p>Project teams apply for funding. Our multi-agent AI system analyzes code, risks, and business model.</p>
+              <h3>Agents Audit 24/7</h3>
+              <p>Autonomous AI agents with NFA identities continuously discover Web3 projects, evaluate them with Claude, and submit via the A2A Protocol — no human required.</p>
             </div>
           </div>
           <div className="step-connector"></div>
@@ -285,8 +243,8 @@ export default function Home() {
           <div className="step">
             <div className="step-number">04</div>
             <div className="step-content">
-              <h3>Earn Compound Yields</h3>
-              <p>Your FundToken balance auto-compounds. Earn yield from successful project investments automatically.</p>
+              <h3>Earn Investment Returns</h3>
+              <p>Your FundToken balance auto-compounds when investments return gains. Proportional to your LP share.</p>
             </div>
           </div>
         </div>
@@ -303,24 +261,26 @@ export default function Home() {
               </svg>
               <span>OmniVault</span>
             </div>
-            <p>AI-Powered Decentralized Venture Capital</p>
+            <p>Autonomous A2A Investment Protocol · Arbitrum</p>
           </div>
           <div className="footer-links">
             <div className="footer-column">
-              <h4>Contracts (Sepolia)</h4>
+              <h4>Contracts (Arb Sepolia)</h4>
               <a href={`${explorerUrl}/address/${fundVaultAddress}`} target="_blank" rel="noopener noreferrer">FundVault ↗</a>
               <a href={`${explorerUrl}/address/${investmentManagerAddress}`} target="_blank" rel="noopener noreferrer">InvestmentManager ↗</a>
               <a href={`${explorerUrl}/address/${omniOracleAddress}`} target="_blank" rel="noopener noreferrer">OmniOracle ↗</a>
+              <a href={`${explorerUrl}/address/${nfaAddress}`} target="_blank" rel="noopener noreferrer">NonFungibleAgent ↗</a>
             </div>
             <div className="footer-column">
-              <h4>Community</h4>
+              <h4>Agents</h4>
+              <a href="/agent-sim">Agent Simulator ↗</a>
               <a href="https://github.com/dinghdong/OmniVault" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
               <a href="https://twitter.com" target="_blank" rel="noopener noreferrer">Twitter ↗</a>
             </div>
           </div>
         </div>
         <div className="footer-bottom">
-          <p>© 2026 OmniVault. Built on <a href="https://0g.ai" target="_blank" rel="noopener noreferrer" style={{ color: '#00ff88' }}>0G</a> · AI-powered decentralized VC.</p>
+          <p>© 2026 OmniVault. Built on <a href="https://arbitrum.io" target="_blank" rel="noopener noreferrer" style={{ color: '#00ff88' }}>Arbitrum</a> · <a href="https://0g.ai" target="_blank" rel="noopener noreferrer" style={{ color: '#00ff88' }}>0G</a> · <a href="https://chain.link" target="_blank" rel="noopener noreferrer" style={{ color: '#00ff88' }}>Chainlink</a> · Autonomous A2A protocol.</p>
         </div>
       </footer>
 

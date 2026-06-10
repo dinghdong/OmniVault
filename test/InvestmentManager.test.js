@@ -2,64 +2,79 @@ const { expect } = require("chai");
 const hre = require("hardhat");
 const { ethers } = require("hardhat");
 
-const e18 = 10n ** 18n;
 const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
-const DELAY = 72 * 3600; // seconds — matches EXECUTION_DELAY constant
+const COMMIT_HASH = "0x1234567812345678123456781234567812345678123456781234567812345678";
+const CONTRACT_ADDR = "0x1234567890123456789012345678901234567890";
+const THRESHOLD = 60n;
+const EXECUTION_DELAY_SEC = 3 * 60; // 3 minutes (same as contract constant)
 
 async function increaseTime(seconds) {
   await hre.network.provider.send("evm_increaseTime", [seconds]);
   await hre.network.provider.send("evm_mine");
 }
 
-describe("InvestmentManager", function () {
-  let im, mockFV, weth, ft, owner, applicant, oracle, riskAgent, other;
+describe("InvestmentManager (AI Agent reform)", function () {
+  let im, mockFV, mockOracle, ft, owner, applicant, riskAgent, lp, other;
 
   beforeEach(async function () {
     const signers = await hre.ethers.getSigners();
     owner     = signers[0];
     applicant = signers[1];
-    oracle    = signers[2];
-    riskAgent = signers[3];
+    riskAgent = signers[2];
+    lp        = signers[3];
     other     = signers[4];
 
-    const MockWETH = await hre.ethers.getContractFactory("MockWETH");
-    weth = await MockWETH.deploy();
-    await weth.waitForDeployment();
-
+    // FundToken
     const FundTokenF = await hre.ethers.getContractFactory("FundToken");
     ft = await FundTokenF.deploy();
     await ft.waitForDeployment();
 
-    const MockFundVault = await hre.ethers.getContractFactory("MockFundVault");
-    mockFV = await MockFundVault.deploy(
-      await ft.getAddress(),
-      await weth.getAddress()
-    );
+    // MockFundVault
+    const MockFVF = await hre.ethers.getContractFactory("MockFundVault");
+    mockFV = await MockFVF.deploy(await ft.getAddress());
     await mockFV.waitForDeployment();
 
-    const IM = await hre.ethers.getContractFactory("InvestmentManager");
-    im = await IM.deploy(
-      await mockFV.getAddress(),
-      await weth.getAddress()
-    );
+    // MockOmniOracleV2
+    const MockOracleF = await hre.ethers.getContractFactory("MockOmniOracleV2");
+    mockOracle = await MockOracleF.deploy();
+    await mockOracle.waitForDeployment();
+
+    // InvestmentManager
+    const IMF = await hre.ethers.getContractFactory("InvestmentManager");
+    im = await IMF.deploy(await mockFV.getAddress(), THRESHOLD);
     await im.waitForDeployment();
 
-    await im.grantRole(await im.AI_ORACLE_ROLE(),  oracle.address);
+    // Set oracle
+    await im.setOracle(await mockOracle.getAddress());
+
+    // Roles
     await im.grantRole(await im.RISK_AGENT_ROLE(), riskAgent.address);
   });
 
   // ── helpers ────────────────────────────────────────────────────────────────
-  async function submitProject() {
-    await im.connect(applicant).submitProject(
-      hre.ethers.id("commit"),
-      "0x1234567890123456789012345678901234567890",
+  async function submitProject(signer = applicant) {
+    const tx = await im.connect(signer).submitProject(
+      COMMIT_HASH,
+      CONTRACT_ADDR,
       "https://api.example.com",
+      ethers.parseEther("0.5"),
+      "did:example:agent1",
+      "https://github.com/example/agent",
+      "https://agent.example.com/api"
     );
+    await tx.wait();
     return await im.projectCount();
   }
 
-  async function approveProject(pid) {
-    await im.connect(oracle).fulfillAudit(pid, 8500, 8000, 9000, ZERO_HASH, []);
+  async function fulfillApproval(pid, finalScore = 75n, rel = 80, qual = 75, mkt = 70) {
+    // finalScore+1 sentinel
+    await mockOracle.setResult(pid, BigInt(finalScore) + 1n, rel, qual, mkt, ZERO_HASH);
+    await im.settleAudit(pid);
+  }
+
+  async function fulfillRejection(pid, finalScore = 30n) {
+    await mockOracle.setResult(pid, BigInt(finalScore) + 1n, 30, 30, 30, ZERO_HASH);
+    await im.settleAudit(pid);
   }
 
   // ── submitProject ───────────────────────────────────────────────────────────
@@ -76,12 +91,18 @@ describe("InvestmentManager", function () {
       expect(p.status).to.equal(2); // Auditing
     });
 
+    it("stores agentDid and agentRepo", async function () {
+      const pid = await submitProject();
+      const p = await im.projects(pid);
+      expect(p.agentDid).to.equal("did:example:agent1");
+      expect(p.agentRepo).to.equal("https://github.com/example/agent");
+      expect(p.agentApiEndpoint).to.equal("https://agent.example.com/api");
+    });
+
     it("reverts on zero commitHash", async function () {
       await expect(
         im.connect(applicant).submitProject(
-          ZERO_HASH,
-          "0x1234567890123456789012345678901234567890",
-          "https://api.example.com"
+          ZERO_HASH, CONTRACT_ADDR, "biz", 0n, "did", "repo", "api"
         )
       ).to.be.revertedWithCustomError(im, "ZeroAmount");
     });
@@ -89,194 +110,176 @@ describe("InvestmentManager", function () {
     it("reverts on zero contractAddr", async function () {
       await expect(
         im.connect(applicant).submitProject(
-          hre.ethers.id("commit"),
-          hre.ethers.ZeroAddress,
-          "https://api.example.com"
+          COMMIT_HASH, ethers.ZeroAddress, "biz", 0n, "did", "repo", "api"
         )
       ).to.be.revertedWithCustomError(im, "ZeroAmount");
     });
+
+    it("emits ProjectSubmitted with agentDid", async function () {
+      await expect(
+        im.connect(applicant).submitProject(
+          COMMIT_HASH, CONTRACT_ADDR, "biz", ethers.parseEther("0.1"),
+          "did:example:agent99", "repo", "api"
+        )
+      ).to.emit(im, "ProjectSubmitted")
+        .withArgs(1n, applicant.address, COMMIT_HASH, CONTRACT_ADDR,
+                  ethers.parseEther("0.1"), "did:example:agent99");
+    });
   });
 
-  // ── fulfillAudit ────────────────────────────────────────────────────────────
-  describe("fulfillAudit", function () {
-    it("sets PendingExecution + executionUnlocksAt when score >= 8000", async function () {
+  // ── settleAudit ─────────────────────────────────────────────────────────────
+  describe("settleAudit", function () {
+    it("approves project above threshold → PendingExecution", async function () {
       const pid = await submitProject();
-      const tx  = await im.connect(oracle).fulfillAudit(pid, 8500, 8000, 9000, ZERO_HASH, []);
-      const receipt = await tx.wait();
-      const block = await ethers.provider.getBlock(receipt.blockNumber);
-
+      await fulfillApproval(pid, 75n);
       const p = await im.projects(pid);
       expect(p.status).to.equal(3); // PendingExecution
-      expect(p.auditScore).to.equal(8500);
-      expect(p.executionUnlocksAt).to.equal(BigInt(block.timestamp) + BigInt(DELAY));
+      expect(p.auditScore).to.equal(75);
     });
 
-    it("emits ExecutionQueued event on approval", async function () {
+    it("stores 3D scores", async function () {
       const pid = await submitProject();
-      await expect(
-        im.connect(oracle).fulfillAudit(pid, 8500, 8000, 9000, ZERO_HASH, [])
-      ).to.emit(im, "ExecutionQueued").withArgs(
-        pid,
-        anyValue, // unlocksAt — block-dependent
-        8500
-      );
+      await fulfillApproval(pid, 75n, 80, 75, 70);
+      const p = await im.projects(pid);
+      expect(p.reliabilityScore).to.equal(80);
+      expect(p.qualityScore).to.equal(75);
+      expect(p.marketFitScore).to.equal(70);
     });
 
-    it("sets Rejected when score < 8000", async function () {
+    it("rejects project below threshold", async function () {
       const pid = await submitProject();
-      await im.connect(oracle).fulfillAudit(pid, 7500, 7000, 8000, ZERO_HASH, []);
+      await fulfillRejection(pid, 30n);
       const p = await im.projects(pid);
       expect(p.status).to.equal(4); // Rejected
     });
 
-    it("reverts if caller lacks AI_ORACLE_ROLE", async function () {
+    it("marks failed audit as Rejected", async function () {
       const pid = await submitProject();
-      await expect(
-        im.connect(other).fulfillAudit(pid, 8500, 8000, 9000, ZERO_HASH, [])
-      ).to.be.revertedWithCustomError(im, "AccessControlUnauthorizedAccount");
-    });
-
-    it("reverts if status is not Auditing", async function () {
-      await expect(
-        im.connect(oracle).fulfillAudit(999, 8500, 8000, 9000, ZERO_HASH, [])
-      ).to.be.revertedWithCustomError(im, "InvalidStatus");
-    });
-  });
-
-  // ── fulfillAuditFailure ────────────────────────────────────────────────────
-  describe("fulfillAuditFailure", function () {
-    it("sets status to Rejected", async function () {
-      const pid = await submitProject();
-      await im.connect(oracle).fulfillAuditFailure(pid, 1);
+      await mockOracle.setResult(pid, ethers.MaxUint256, 0, 0, 0, ZERO_HASH);
+      await im.settleAudit(pid);
       const p = await im.projects(pid);
       expect(p.status).to.equal(4); // Rejected
     });
+
+    it("reverts if not yet fulfilled", async function () {
+      const pid = await submitProject();
+      // No oracle result set → fulfilledScore = 0
+      await expect(im.settleAudit(pid)).to.be.revertedWith("Audit not yet fulfilled");
+    });
+
+    it("reverts if not in Auditing status", async function () {
+      const pid = await submitProject();
+      await fulfillApproval(pid, 75n);
+      await expect(im.settleAudit(pid))
+        .to.be.revertedWithCustomError(im, "InvalidStatus");
+    });
   });
 
-  // ── veto ───────────────────────────────────────────────────────────────────
+  // ── veto ────────────────────────────────────────────────────────────────────
   describe("veto", function () {
-    it("RISK_AGENT can veto during timelock window", async function () {
+    it("LP can veto during timelock", async function () {
+      await mockFV.setFakeBalance(ethers.parseEther("1")); // make lp appear as LP
       const pid = await submitProject();
-      await approveProject(pid);
-
-      await im.connect(riskAgent).veto(pid, 1);
-
+      await fulfillApproval(pid, 75n);
+      await im.connect(lp).veto(pid);
       const p = await im.projects(pid);
       expect(p.status).to.equal(9); // Vetoed
     });
 
-    it("emits ExecutionVetoed event", async function () {
+    it("non-LP cannot veto", async function () {
       const pid = await submitProject();
-      await approveProject(pid);
-
-      await expect(im.connect(riskAgent).veto(pid, 2))
-        .to.emit(im, "ExecutionVetoed")
-        .withArgs(pid, riskAgent.address, 2);
+      await fulfillApproval(pid, 75n);
+      await expect(im.connect(other).veto(pid))
+        .to.be.revertedWithCustomError(im, "NotLP");
     });
 
-    it("reverts if caller lacks RISK_AGENT_ROLE", async function () {
+    it("cannot veto after timelock expires", async function () {
+      await mockFV.setFakeBalance(ethers.parseEther("1"));
       const pid = await submitProject();
-      await approveProject(pid);
-
-      await expect(
-        im.connect(other).veto(pid, 1)
-      ).to.be.revertedWithCustomError(im, "AccessControlUnauthorizedAccount");
-    });
-
-    it("reverts if project is not PendingExecution", async function () {
-      const pid = await submitProject();
-      // Still in Auditing
-      await expect(
-        im.connect(riskAgent).veto(pid, 1)
-      ).to.be.revertedWithCustomError(im, "InvalidStatus");
-    });
-
-    it("reverts after timelock has expired", async function () {
-      const pid = await submitProject();
-      await approveProject(pid);
-
-      await increaseTime(DELAY + 1);
-
-      await expect(
-        im.connect(riskAgent).veto(pid, 1)
-      ).to.be.revertedWithCustomError(im, "TimelockExpired");
-    });
-
-    it("vetoed project cannot be executed", async function () {
-      const pid = await submitProject();
-      await approveProject(pid);
-      await im.connect(riskAgent).veto(pid, 1);
-      await increaseTime(DELAY + 1);
-
-      await expect(
-        im.connect(oracle).executeInvestment(pid, ethers.parseEther("1"), "0x")
-      ).to.be.revertedWithCustomError(im, "InvalidStatus");
+      await fulfillApproval(pid, 75n);
+      await increaseTime(EXECUTION_DELAY_SEC + 1);
+      await expect(im.connect(lp).veto(pid))
+        .to.be.revertedWithCustomError(im, "TimelockExpired");
     });
   });
 
-  // ── executeInvestment ──────────────────────────────────────────────────────
-  // executeInvestment is now permissionless — anyone can call it after timelock.
+  // ── executeInvestment ───────────────────────────────────────────────────────
   describe("executeInvestment", function () {
-    it("reverts if timelock has not yet expired", async function () {
-      const pid = await submitProject();
-      await approveProject(pid);
+    it("executes after timelock, sends upfront ETH to applicant", async function () {
+      const investAmount = ethers.parseEther("1");
 
-      await expect(
-        im.connect(other).executeInvestment(pid, ethers.parseEther("1"), "0x")
-      ).to.be.revertedWithCustomError(im, "TimelockActive");
+      // Fund MockFundVault with ETH so divestForInvestment can send it
+      await owner.sendTransaction({ to: await mockFV.getAddress(), value: investAmount });
+
+      const pid = await submitProject();
+      await fulfillApproval(pid, 80n);
+      await increaseTime(EXECUTION_DELAY_SEC + 1);
+
+      const before = await ethers.provider.getBalance(applicant.address);
+      const tx = await im.executeInvestment(pid, investAmount, "0x");
+      const receipt = await tx.wait();
+      const after = await ethers.provider.getBalance(applicant.address);
+
+      const upfront = investAmount * 2000n / 10000n; // 20%
+      expect(after - before).to.equal(upfront);
+
+      const p = await im.projects(pid);
+      expect(p.status).to.equal(5); // Active
+      expect(p.investmentAmount).to.equal(investAmount);
     });
 
-    it("reverts on zero amount (after timelock)", async function () {
+    it("reverts before timelock", async function () {
       const pid = await submitProject();
-      await approveProject(pid);
-      await increaseTime(DELAY + 1);
-
-      await expect(
-        im.connect(other).executeInvestment(pid, 0, "0x")
-      ).to.be.revertedWithCustomError(im, "ZeroAmount");
+      await fulfillApproval(pid, 75n);
+      await expect(im.executeInvestment(pid, ethers.parseEther("0.1"), "0x"))
+        .to.be.revertedWithCustomError(im, "TimelockActive");
     });
 
-    it("reverts if project is Rejected (not PendingExecution)", async function () {
+    it("reverts if not PendingExecution", async function () {
       const pid = await submitProject();
-      await im.connect(oracle).fulfillAudit(pid, 6000, 5500, 6500, ZERO_HASH, []);
-      await increaseTime(DELAY + 1);
-
-      await expect(
-        im.connect(other).executeInvestment(pid, ethers.parseEther("1"), "0x")
-      ).to.be.revertedWithCustomError(im, "InvalidStatus");
-    });
-
-    it("non-oracle can call executeInvestment after timelock (permissionless)", async function () {
-      const pid = await submitProject();
-      await approveProject(pid);
-      await increaseTime(DELAY + 1);
-      // Verify no AccessControl revert — may revert on WETH.withdraw in mock, but not on role check.
-      await expect(
-        im.connect(other).executeInvestment(pid, ethers.parseEther("1"), "0x")
-      ).to.not.be.revertedWithCustomError(im, "AccessControlUnauthorizedAccount");
+      await increaseTime(EXECUTION_DELAY_SEC + 1);
+      await expect(im.executeInvestment(pid, ethers.parseEther("0.1"), "0x"))
+        .to.be.revertedWithCustomError(im, "InvalidStatus");
     });
   });
 
-  // ── triggerCircuitBreak ────────────────────────────────────────────────────
+  // ── getAuditScores ──────────────────────────────────────────────────────────
+  describe("getAuditScores", function () {
+    it("returns all 4 score fields", async function () {
+      const pid = await submitProject();
+      await fulfillApproval(pid, 76n, 85, 72, 68);
+      const [final, rel, qual, mkt] = await im.getAuditScores(pid);
+      expect(final).to.equal(76);
+      expect(rel).to.equal(85);
+      expect(qual).to.equal(72);
+      expect(mkt).to.equal(68);
+    });
+  });
+
+  // ── circuit break ───────────────────────────────────────────────────────────
   describe("triggerCircuitBreak", function () {
-    it("requires RISK_AGENT_ROLE", async function () {
+    it("only RISK_AGENT_ROLE can trigger", async function () {
+      const investAmount = ethers.parseEther("0.5");
+      await owner.sendTransaction({ to: await mockFV.getAddress(), value: investAmount });
       const pid = await submitProject();
-      await expect(
-        im.connect(oracle).triggerCircuitBreak(pid, 1)
-      ).to.be.revertedWithCustomError(im, "AccessControlUnauthorizedAccount");
+      await fulfillApproval(pid, 75n);
+      await increaseTime(EXECUTION_DELAY_SEC + 1);
+      await im.executeInvestment(pid, investAmount, "0x");
+      await expect(im.connect(other).triggerCircuitBreak(pid))
+        .to.be.revertedWithCustomError(im, "AccessControlUnauthorizedAccount");
     });
   });
 
-  // ── markExit ───────────────────────────────────────────────────────────────
-  describe("markExit", function () {
-    it("reverts if status is not Active or CircuitBroken", async function () {
-      const pid = await submitProject();
-      await expect(
-        im.connect(applicant).markExit(pid, ethers.parseEther("1"))
-      ).to.be.revertedWithCustomError(im, "InvalidStatus");
+  // ── setScoreThreshold ───────────────────────────────────────────────────────
+  describe("setScoreThreshold", function () {
+    it("updates threshold", async function () {
+      await im.setScoreThreshold(70n);
+      expect(await im.scoreThreshold()).to.equal(70n);
+    });
+
+    it("reverts for threshold > 100", async function () {
+      await expect(im.setScoreThreshold(101n))
+        .to.be.revertedWithCustomError(im, "InvalidThreshold");
     });
   });
 });
-
-// chai's anyValue matcher — works with hardhat-chai-matchers
-const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");

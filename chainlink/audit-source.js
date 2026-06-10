@@ -1,11 +1,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// OmniVault — Chainlink Functions AI Audit Source (single-call)
+// OmniVault — Chainlink Functions AI Audit Source  (A2A multi-dimension)
 // Runs inside the Chainlink DON (Decentralized Oracle Network).
 //
-// args:    [0] projectId (string), [1] sourceCodeHash (hex string), [2] bizApi (string)
+// args:    [0] projectId      (string)
+//          [1] sourceCodeHash (hex string — keccak256 of project commit)
+//          [2] bizApi         (URL or description of the project)
 // secrets: ZG_API_KEY, ZG_BASE_URL
 //
-// Returns: score(32) + contentHash(32) + summaryJSON(≤192 bytes UTF-8)
+// Response format (160 bytes — 5 ABI-encoded words):
+//   word 0  (  0– 31): finalScore   uint256  composite [0,100]  (40%×R + 30%×Q + 30%×M)
+//   word 1  ( 32– 63): reliability  uint256  [0,100]  — agent uptime / audit track-record
+//   word 2  ( 64– 95): quality      uint256  [0,100]  — code & product quality
+//   word 3  ( 96–127): marketFit    uint256  [0,100]  — market traction / product-market fit
+//   word 4  (128–159): contentHash  bytes32  SHA-256 of full audit log
+//
+// Threshold for APPROVE: finalScore >= 60.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const projectId      = args[0];
@@ -16,7 +25,11 @@ const BASE   = secrets.ZG_BASE_URL || "https://router-api-testnet.integratenetwo
 const APIKEY = secrets.ZG_API_KEY  || "sk-6d323fcd-2083-4a00-850d-1b8d1273d45b";
 const MODEL  = "qwen/qwen-2.5-7b-instruct";
 
-// ── Single comprehensive audit call ──────────────────────────────────────────
+// ── A2A Multi-agent audit prompt ─────────────────────────────────────────────
+// Three agent axes map to the OmniVault ScoringEngine weights:
+//   reliability  → 40% weight  (on-chain security, agent consistency, audit history)
+//   quality      → 30% weight  (code quality, documentation, test coverage)
+//   marketFit    → 30% weight  (market traction, tokenomics, competitive position)
 const res = await Functions.makeHttpRequest({
   url: `${BASE}/chat/completions`,
   method: "POST",
@@ -28,25 +41,29 @@ const res = await Functions.makeHttpRequest({
     model: MODEL,
     messages: [{
       role: "user",
-      content: `You are an AI investment committee for a decentralized VC fund auditing a Web3 project.
+      content: `You are an A2A (Agent-to-Agent) AI investment committee for OmniVault, a decentralized VC fund.
+You evaluate Web3 projects across THREE dimensions that match our on-chain ScoringEngine weights.
 
-Project commit hash: ${sourceCodeHash}
+Project ID: ${projectId}
+Commit hash: ${sourceCodeHash}
 Project info: ${bizApi || "No additional info provided."}
 
-Perform a 3-dimension audit and respond ONLY with valid JSON (no markdown, no explanation):
+Perform a 3-dimension audit and respond ONLY with valid JSON (no markdown, no extra text):
 {
-  "securityScore": <0-100, smart contract security>,
-  "securityFindings": ["<finding1>", "<finding2>"],
-  "riskScore": <0-100, DeFi/market/regulatory risk>,
-  "riskFactors": ["<risk1>", "<risk2>"],
-  "finalScore": <0-100, weighted average>,
+  "reliabilityScore": <0-100, smart contract security, audit history, agent reliability>,
+  "qualityScore": <0-100, code quality, documentation, test coverage, architecture>,
+  "marketFitScore": <0-100, market traction, tokenomics, competitive position, user adoption>,
+  "reliabilityFindings": ["<finding1>", "<finding2>"],
+  "qualityFindings": ["<finding1>", "<finding2>"],
+  "marketFindings": ["<finding1>", "<finding2>"],
   "recommendation": "<APPROVE or REJECT>",
-  "rationale": "<one concise sentence explaining the decision>"
+  "rationale": "<one concise sentence (max 120 chars) explaining the decision>"
 }
 
-Threshold for APPROVE: finalScore >= 60.`,
+Scoring weights: reliability=40%, quality=30%, marketFit=30%.
+Threshold for APPROVE: weightedScore >= 60.`,
     }],
-    max_tokens: 500,
+    max_tokens: 600,
   },
   timeout: 9000,
 });
@@ -73,45 +90,61 @@ try {
   parsed = JSON.parse(cleaned);
 } catch (_) {}
 
-const s1          = safeNum(parsed, "securityScore", 50);
-const s2          = safeNum(parsed, "riskScore",     50);
-const s3          = safeNum(parsed, "finalScore",    Math.round((s1 + s2) / 2));
-const finalScore  = Math.round((s1 + s2 + s3) / 3);
-const rec         = safeStr(parsed, "recommendation", "UNKNOWN");
-const rationale   = safeStr(parsed, "rationale", "").slice(0, 100);
-const findings    = safeArr(parsed, "securityFindings").map(f => String(f).slice(0, 55));
-const risks       = safeArr(parsed, "riskFactors").map(r => String(r).slice(0, 55));
+// 3D dimension scores
+const reliability = safeNum(parsed, "reliabilityScore", 50);
+const quality     = safeNum(parsed, "qualityScore",     50);
+const marketFit   = safeNum(parsed, "marketFitScore",   50);
 
-// ── Content hash: SHA-256 of full audit output ────────────────────────────────
-const auditLog = JSON.stringify({ projectId, sourceCodeHash, model: MODEL, raw, scores: { s1, s2, s3, finalScore } });
+// Composite score: 40% reliability + 30% quality + 30% marketFit
+// Matches OmniVault ScoringEngine default weights (4000/3000/3000 / 10000)
+const finalScore = Math.min(100, Math.round(
+  (reliability * 4000 + quality * 3000 + marketFit * 3000) / 10000
+));
+
+const rec      = safeStr(parsed, "recommendation", "UNKNOWN");
+const rationale = safeStr(parsed, "rationale", "").slice(0, 120);
+const rFindings = safeArr(parsed, "reliabilityFindings").map(f => String(f).slice(0, 60));
+const qFindings = safeArr(parsed, "qualityFindings").map(f => String(f).slice(0, 60));
+const mFindings = safeArr(parsed, "marketFindings").map(f => String(f).slice(0, 60));
+
+// ── Content hash: SHA-256 of full audit log ───────────────────────────────────
+const auditLog = JSON.stringify({
+  projectId, sourceCodeHash, model: MODEL, raw,
+  scores: { reliability, quality, marketFit, finalScore },
+});
 const hashBuf  = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(auditLog));
 const hashHex  = Array.from(new Uint8Array(hashBuf))
   .map(b => b.toString(16).padStart(2, "0")).join("");
 
-// ── Compact summary for on-chain display (≤192 bytes) ────────────────────────
-const summary = JSON.stringify({
-  s: [s1, s2, s3, finalScore],
-  r: rec,
-  t: rationale,
-  f: findings.filter(Boolean),
-  k: risks.filter(Boolean),
-});
-
-// ── Encode: score(32) + contentHash(32) + summary(UTF-8) ─────────────────────
-// Buffer is NOT available in the Chainlink DON; use Uint8Array + TextEncoder instead.
-function hexToBytes(hex) {
-  const arr = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    arr[i / 2] = parseInt(hex.substr(i, 2), 16);
+// ── Encode: 5 × 32-byte ABI words = 160 bytes ────────────────────────────────
+// word 0: finalScore   (uint256 big-endian)
+// word 1: reliability  (uint256 big-endian)
+// word 2: quality      (uint256 big-endian)
+// word 3: marketFit    (uint256 big-endian)
+// word 4: contentHash  (bytes32)
+//
+// Buffer is NOT available in the Chainlink DON; use Uint8Array + TextEncoder.
+function numToWord(n) {
+  const hex = Math.floor(n).toString(16).padStart(64, "0");
+  const arr = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
+    arr[i] = parseInt(hex.substr(i * 2, 2), 16);
+  }
+  return arr;
+}
+function hexToBytes32(hex) {
+  const arr = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
+    arr[i] = parseInt(hex.substr(i * 2, 2), 16);
   }
   return arr;
 }
 
-const scoreHex     = finalScore.toString(16).padStart(64, "0");
-const headerBytes  = hexToBytes(scoreHex + hashHex);           // 64 bytes
-const summaryBytes = new TextEncoder().encode(summary.slice(0, 192));
+const result = new Uint8Array(160);
+result.set(numToWord(finalScore),   0);    // word 0
+result.set(numToWord(reliability), 32);    // word 1
+result.set(numToWord(quality),     64);    // word 2
+result.set(numToWord(marketFit),   96);    // word 3
+result.set(hexToBytes32(hashHex), 128);    // word 4
 
-const result = new Uint8Array(headerBytes.length + summaryBytes.length);
-result.set(headerBytes, 0);
-result.set(summaryBytes, headerBytes.length);
 return result;

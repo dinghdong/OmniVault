@@ -2,47 +2,33 @@
 pragma solidity ^0.8.24;
 
 import { IFundVault } from "../../interfaces/IFundVault.sol";
-import { IWETH } from "../../interfaces/IWETH.sol";
 
 /// @title MockFundVault — Minimal mock for InvestmentManager tests
 contract MockFundVault is IFundVault {
     address public immutable FUND_TOKEN;
-    address public immutable WETH_ADDR;
+    uint256 private _fakeBalance;
 
-    constructor(address _fundToken, address _weth) {
+    constructor(address _fundToken) {
         FUND_TOKEN = _fundToken;
-        WETH_ADDR = _weth;
     }
 
-    function WETH() external view returns (address) {
-        return WETH_ADDR;
+    receive() external payable {}
+
+    function setFakeBalance(uint256 amount) external { _fakeBalance = amount; }
+
+    function fundToken() external view returns (address) { return FUND_TOKEN; }
+    function vaultBalance() external view returns (uint256) { return address(this).balance; }
+
+    function deposit() external payable returns (uint256 shares) { return msg.value; }
+    function redeem(uint256 shares) external pure returns (uint256 assets) { return shares; }
+    function balanceOf(address) external view returns (uint256) { return _fakeBalance; }
+
+    function divestForInvestment(uint256 amount) external {
+        // Send ETH to caller (simulates vault paying out)
+        (bool ok,) = msg.sender.call{value: amount}("");
+        require(ok, "MockFundVault: transfer failed");
     }
 
-    function fundToken() external view returns (address) {
-        return FUND_TOKEN;
-    }
-
-    function deposit() external payable returns (uint256 shares) {
-        return msg.value;
-    }
-
-    function redeem(uint256 shares) external pure returns (uint256 assets) {
-        return shares;
-    }
-
-    function balanceOf(address) external pure returns (uint256) {
-        return 0;
-    }
-
-    function divestForInvestment(uint256 /* amount */ ) external pure {
-        // no-op for mock
-    }
-
-    function addRealizedGains(uint256 /* proceeds */ , uint256 /* originalAmount */ ) external pure {
-        // no-op for mock
-    }
-
-    function addRealizedLoss(uint256 /* recoveredAmount */ , uint256 /* originalAmount */ ) external pure {
-        // no-op for mock
-    }
+    function addRealizedGains(uint256, uint256) external payable {}
+    function addRealizedLoss(uint256, uint256) external payable {}
 }

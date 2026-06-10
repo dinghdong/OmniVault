@@ -191,8 +191,12 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
   const investedEth = status.investmentAmount > BigInt(0) ? formatEther(status.investmentAmount) : null;
   const releasedEth = status.releasedAmount   > BigInt(0) ? formatEther(status.releasedAmount)   : null;
 
-  const auditScore    = Number(status.auditScore ?? 0);
-  const hasScore      = status.statusNum >= 3 && (auditScore > 0 || !!status.auditAnalysis);
+  const auditScore      = status.auditScore;
+  const reliabilityScore = status.reliabilityScore;
+  const qualityScore    = status.qualityScore;
+  const marketFitScore  = status.marketFitScore;
+  const has3DScores     = reliabilityScore > 0 || qualityScore > 0 || marketFitScore > 0;
+  const hasScore        = status.statusNum >= 3 && (auditScore > 0 || !!status.auditAnalysis || has3DScores);
   const contentHashSet =
     status.auditContentHash &&
     status.auditContentHash !== '0x' + '0'.repeat(64);
@@ -259,12 +263,12 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
               <div className="asv-score-circle" style={{
                 background: `conic-gradient(${auditScore >= 60 ? '#00ff88' : '#f87171'} ${auditScore * 3.6}deg, rgba(255,255,255,0.06) 0deg)`,
               }}>
-                <span className="asv-score-num">{auditScore || (analysis?.scores?.[3] ?? 0)}</span>
+                <span className="asv-score-num">{auditScore}</span>
               </div>
               <div className="asv-score-info">
                 <div className="asv-score-label">AI Audit Score</div>
                 <div className="asv-score-rec">
-                  {(auditScore || (analysis?.scores?.[3] ?? 0)) >= 60
+                  {auditScore >= 60
                     ? <span style={{ color: '#00ff88' }}>✓ Above threshold — queued for investment</span>
                     : <span style={{ color: '#f87171' }}>✕ Below threshold — application rejected</span>
                   }
@@ -283,16 +287,19 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
               </div>
             </div>
 
-            {/* ── Round scores ── */}
-            {analysis && analysis.scores.length >= 4 && (
+            {/* ── 3D A2A Scores (Reliability / Quality / MarketFit) ── */}
+            {has3DScores && (
               <div className="asv-round-scores">
                 {[
-                  { label: 'Security', score: analysis.scores[0] },
-                  { label: 'Risk',     score: analysis.scores[1] },
-                  { label: 'Final',    score: analysis.scores[2] },
-                ].map(({ label, score }) => (
+                  { label: 'Reliability', score: reliabilityScore, weight: '40%' },
+                  { label: 'Quality',     score: qualityScore,     weight: '30%' },
+                  { label: 'Market Fit',  score: marketFitScore,   weight: '30%' },
+                ].map(({ label, score, weight }) => (
                   <div key={label} className="asv-round-item">
-                    <span className="asv-round-label">{label}</span>
+                    <span className="asv-round-label" style={{ minWidth: 80 }}>
+                      {label}
+                      <span style={{ opacity: 0.4, fontSize: 10, marginLeft: 3 }}>({weight})</span>
+                    </span>
                     <div className="asv-round-bar">
                       <div className="asv-round-bar-fill" style={{
                         width: `${score}%`,
@@ -535,6 +542,11 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
       {status.statusLabel === 'Rejected' && !status.auditFailed && (
         <div className="asv-final asv-final--error">
           AI audit score below threshold ({auditScore}/100 &lt; 60). No funds were transferred.
+          {has3DScores && (
+            <span style={{ display: 'block', marginTop: 4, fontSize: 12, opacity: 0.7 }}>
+              Reliability: {reliabilityScore} · Quality: {qualityScore} · Market Fit: {marketFitScore}
+            </span>
+          )}
         </div>
       )}
       {status.statusLabel === 'Vetoed' && (

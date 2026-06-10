@@ -72,15 +72,18 @@ export default function ApplyModal() {
   const chainId     = useChainId();
   const { submit, state, reset } = useProjectSubmit();
 
-  const [file, setFile]                   = useState<File | null>(null);
-  const [requestedEth, setRequestedEth]   = useState('');
-  const [projectInfo, setProjectInfo]     = useState('');
-  const [commitHash, setCommitHash]       = useState<`0x${string}` | null>(null);
-  const [zgRootHash, setZgRootHash]       = useState<`0x${string}` | null>(null);
-  const [zgTxHash, setZgTxHash]           = useState<string | null>(null);
-  const [zgUploaded, setZgUploaded]       = useState(false);
-  const [step, setStep]                   = useState<Step>('idle');
-  const [localError, setLocalError]       = useState<string | null>(null);
+  const [file, setFile]                     = useState<File | null>(null);
+  const [requestedEth, setRequestedEth]     = useState('');
+  const [projectInfo, setProjectInfo]       = useState('');
+  const [agentDid, setAgentDid]             = useState('');
+  const [agentRepo, setAgentRepo]           = useState('');
+  const [agentApiEndpoint, setAgentApiEndpoint] = useState('');
+  const [commitHash, setCommitHash]         = useState<`0x${string}` | null>(null);
+  const [zgRootHash, setZgRootHash]         = useState<`0x${string}` | null>(null);
+  const [zgTxHash, setZgTxHash]             = useState<string | null>(null);
+  const [zgUploaded, setZgUploaded]         = useState(false);
+  const [step, setStep]                     = useState<Step>('idle');
+  const [localError, setLocalError]         = useState<string | null>(null);
 
   const isWrongChain  = !!address && chainId !== contractChainId;
   const isTransacting = state.isPending || state.isConfirming;
@@ -88,8 +91,10 @@ export default function ApplyModal() {
   const isConfirmed   = state.isConfirmed;
   const reqEthNum     = parseFloat(requestedEth);
   const busy          = step !== 'idle' || isTransacting || isConfirmed;
+  // agentDid is required for AI Agent A2A audit flow
   const canSubmit     = !!address && !isWrongChain && !!file
                         && requestedEth.trim().length > 0 && reqEthNum > 0
+                        && agentDid.trim().length > 0
                         && !busy;
 
   const handleFile = async (f: File) => {
@@ -146,7 +151,15 @@ export default function ApplyModal() {
       // 3. Submit on-chain — use 0G Merkle root (or keccak256 fallback) as commitHash
       setStep('submitting');
       const reqWei = parseEther(requestedEth.trim() as `${number}`);
-      submit(onChainHash, address, projectInfo.trim(), reqWei);
+      submit(
+        onChainHash,
+        address,
+        projectInfo.trim(),
+        reqWei,
+        agentDid.trim(),
+        agentRepo.trim(),
+        agentApiEndpoint.trim(),
+      );
     } catch (err: any) {
       setLocalError(err?.message || 'Submission failed');
     } finally {
@@ -159,6 +172,9 @@ export default function ApplyModal() {
     setFile(null);
     setRequestedEth('');
     setProjectInfo('');
+    setAgentDid('');
+    setAgentRepo('');
+    setAgentApiEndpoint('');
     setCommitHash(null);
     setZgRootHash(null);
     setZgTxHash(null);
@@ -285,9 +301,58 @@ export default function ApplyModal() {
         </div>
       </div>
 
-      {/* Step 3: Funding Request */}
+      {/* Step 3: AI Agent Identity (required for A2A audit) */}
       <div className="apply-step">
         <div className="apply-step-num">3</div>
+        <div className="apply-step-body">
+          <div className="apply-label">
+            AI Agent DID <span style={{ color: '#f87171', fontSize: 11 }}>required</span>
+          </div>
+          <input
+            className="input-field"
+            type="text"
+            placeholder="did:omni:agent:0xABCDEF… or did:web:your-agent.example.com"
+            value={agentDid}
+            onChange={e => setAgentDid(e.target.value)}
+            disabled={busy}
+            style={{ width: '100%' }}
+          />
+          <div className="apply-hint" style={{ marginTop: 4 }}>
+            Decentralized identifier of the AI agent submitting this project.
+          </div>
+          <div className="apply-label" style={{ marginTop: 10 }}>
+            Agent Repository <span style={{ opacity: 0.45, fontWeight: 400 }}>(optional)</span>
+          </div>
+          <input
+            className="input-field"
+            type="text"
+            placeholder="https://github.com/your-org/agent-repo or ipfs://Qm…"
+            value={agentRepo}
+            onChange={e => setAgentRepo(e.target.value)}
+            disabled={busy}
+            style={{ width: '100%' }}
+          />
+          <div className="apply-label" style={{ marginTop: 10 }}>
+            Agent API Endpoint <span style={{ opacity: 0.45, fontWeight: 400 }}>(optional)</span>
+          </div>
+          <input
+            className="input-field"
+            type="text"
+            placeholder="https://api.your-agent.com/v1/audit"
+            value={agentApiEndpoint}
+            onChange={e => setAgentApiEndpoint(e.target.value)}
+            disabled={busy}
+            style={{ width: '100%' }}
+          />
+          <div className="apply-hint" style={{ marginTop: 4 }}>
+            REST/gRPC endpoint for A2A calls — enables other agents to collaborate on the audit.
+          </div>
+        </div>
+      </div>
+
+      {/* Step 4: Funding Request */}
+      <div className="apply-step">
+        <div className="apply-step-num">4</div>
         <div className="apply-step-body">
           <div className="apply-label">Funding Request (ETH)</div>
           <div className="apply-amount-row">

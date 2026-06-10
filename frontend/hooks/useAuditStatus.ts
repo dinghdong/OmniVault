@@ -26,10 +26,17 @@ export interface AuditStatus {
   commitHash:         string;
   contractAddr:       string;
   bizApi:             string;
+  // AI Agent metadata (v2)
+  agentDid:           string;
+  agentRepo:          string;
+  agentApiEndpoint:   string;
   statusNum:          number;
   statusLabel:        string;
   requestedAmount:    bigint;
-  auditScore:         bigint;
+  auditScore:         number;    // uint8 [0,100]
+  reliabilityScore:   number;    // 3D dimension — reliability
+  qualityScore:       number;    // 3D dimension — quality
+  marketFitScore:     number;    // 3D dimension — market fit
   auditContentHash:   string;
   auditAnalysis:      AuditAnalysis | null;
   auditFailed:        boolean;
@@ -78,9 +85,11 @@ function parseAuditSummary(raw: string): AuditAnalysis | null {
 
 const EMPTY: AuditStatus = {
   applicant: '', commitHash: '', contractAddr: '', bizApi: '',
+  agentDid: '', agentRepo: '', agentApiEndpoint: '',
   statusNum: 0, statusLabel: 'None',
   requestedAmount: BigInt(0),
-  auditScore: BigInt(0), auditContentHash: '', auditAnalysis: null, auditFailed: false,
+  auditScore: 0, reliabilityScore: 0, qualityScore: 0, marketFitScore: 0,
+  auditContentHash: '', auditAnalysis: null, auditFailed: false,
   investmentAmount: BigInt(0), releasedAmount: BigInt(0),
   submittedAt: BigInt(0), auditedAt: BigInt(0),
   investedAt: BigInt(0), executionUnlocksAt: BigInt(0),
@@ -110,14 +119,7 @@ export function useAuditStatus(projectId: number | null): AuditStatus {
         functionName: 'projects',
         args:    [BigInt(projectId ?? 0)],
       },
-      // 1: OmniOracle.s_pendingRequest(projectId) — non-zero while Chainlink DON is running
-      {
-        address: omniOracleAddress,
-        abi:     omniOracleAbi,
-        functionName: 's_pendingRequest',
-        args:    [BigInt(projectId ?? 0)],
-      },
-      // 2: OmniOracle.fulfilledScore(projectId) — non-zero once callback stored result
+      // 1: OmniOracle.fulfilledScore(projectId) — non-zero once callback stored result
       {
         address: omniOracleAddress,
         abi:     omniOracleAbi,
@@ -160,8 +162,7 @@ export function useAuditStatus(projectId: number | null): AuditStatus {
   if (!enabled || isLoading) return { ...EMPTY, isLoading };
 
   const projectRaw      = data?.[0];
-  const pendingRaw      = data?.[1];
-  const fulfilledRaw    = data?.[2];
+  const fulfilledRaw    = data?.[1];
 
   if (!projectRaw || projectRaw.status !== 'success') {
     return { ...EMPTY, isLoading: false };
@@ -172,15 +173,22 @@ export function useAuditStatus(projectId: number | null): AuditStatus {
   const get = (name: string, idx: number) =>
     p[name] !== undefined ? p[name] : (Array.isArray(p) ? p[idx] : undefined);
 
-  const statusNum   = Number(get('status', 4));
-  const clRequestId = pendingRaw?.status === 'success'
-    ? (pendingRaw.result as string)
-    : null;
-  const chainlinkPending = !!clRequestId && clRequestId !== ZERO_BYTES32;
+  const statusNum   = Number(get('status', 7));
+  // chainlinkPending: true while project is in Auditing state (status=2)
+  const chainlinkPending = statusNum === 2;
 
-  const auditScore    = get('auditScore', 5) as bigint;
-  const auditAnalysis = parseAuditSummary(rawSummary);
-  const auditFailed   = statusNum === 4 && auditScore === BigInt(0) && !auditAnalysis;
+  // Named access preferred; positional fallback for new struct layout (v2):
+  // [0]applicant [1]commitHash [2]contractAddr [3]bizApi
+  // [4]agentDid [5]agentRepo [6]agentApiEndpoint
+  // [7]status [8]auditScore [9]reliabilityScore [10]qualityScore [11]marketFitScore
+  // [12]submittedAt [13]auditedAt [14]investedAt [15]executionUnlocksAt [16]exitedAt
+  // [17]requestedAmount [18]auditContentHash [19]investmentAmount [20]releasedAmount [21]exitProceeds
+  const auditScore      = Number(get('auditScore',       8)  ?? 0);
+  const reliabilityScore = Number(get('reliabilityScore', 9)  ?? 0);
+  const qualityScore    = Number(get('qualityScore',     10) ?? 0);
+  const marketFitScore  = Number(get('marketFitScore',   11) ?? 0);
+  const auditAnalysis   = parseAuditSummary(rawSummary);
+  const auditFailed     = statusNum === 4 && auditScore === 0 && !auditAnalysis;
 
   // needsSettlement: oracle has stored result but IM is still "Auditing"
   const oracleFulfilled = fulfilledRaw?.status === 'success'
@@ -188,32 +196,34 @@ export function useAuditStatus(projectId: number | null): AuditStatus {
     : BigInt(0);
   const needsSettlement = statusNum === 2 && oracleFulfilled > BigInt(0);
 
-  // Field indices match packed struct layout:
-  // [0]applicant [1]commitHash [2]contractAddr [3]bizApi
-  // [4]status [5]auditScore [6]submittedAt [7]auditedAt [8]investedAt [9]executionUnlocksAt [10]exitedAt
-  // [11]requestedAmount [12]auditContentHash [13]investmentAmount [14]releasedAmount [15]exitProceeds
   return {
     applicant:          get('applicant',          0)  as string,
     commitHash:         get('commitHash',         1)  as string,
     contractAddr:       get('contractAddr',       2)  as string,
     bizApi:             get('bizApi',             3)  as string,
+    agentDid:           (get('agentDid',          4)  as string) || '',
+    agentRepo:          (get('agentRepo',         5)  as string) || '',
+    agentApiEndpoint:   (get('agentApiEndpoint',  6)  as string) || '',
     statusNum,
     statusLabel:        PROJECT_STATUS[statusNum] ?? 'Unknown',
-    requestedAmount:    get('requestedAmount',    11) as bigint,
+    requestedAmount:    get('requestedAmount',    17) as bigint,
     auditScore,
-    auditContentHash:   get('auditContentHash',   12) as string,
+    reliabilityScore,
+    qualityScore,
+    marketFitScore,
+    auditContentHash:   get('auditContentHash',   18) as string,
     auditAnalysis,
     auditFailed,
-    investmentAmount:   get('investmentAmount',   13) as bigint,
-    releasedAmount:     get('releasedAmount',     14) as bigint,
-    submittedAt:        BigInt(get('submittedAt', 6)  ?? 0),
-    auditedAt:          BigInt(get('auditedAt',   7)  ?? 0),
-    investedAt:         BigInt(get('investedAt',  8)  ?? 0),
-    executionUnlocksAt: BigInt(get('executionUnlocksAt', 9) ?? 0),
-    exitedAt:           BigInt(get('exitedAt',    10) ?? 0),
-    exitProceeds:       get('exitProceeds',       15) as bigint,
+    investmentAmount:   get('investmentAmount',   19) as bigint,
+    releasedAmount:     get('releasedAmount',     20) as bigint,
+    submittedAt:        BigInt(get('submittedAt', 12) ?? 0),
+    auditedAt:          BigInt(get('auditedAt',   13) ?? 0),
+    investedAt:         BigInt(get('investedAt',  14) ?? 0),
+    executionUnlocksAt: BigInt(get('executionUnlocksAt', 15) ?? 0),
+    exitedAt:           BigInt(get('exitedAt',    16) ?? 0),
+    exitProceeds:       get('exitProceeds',       21) as bigint,
     chainlinkPending,
-    chainlinkRequestId: chainlinkPending ? clRequestId : null,
+    chainlinkRequestId: null,
     needsSettlement,
     isLoading: false,
   };

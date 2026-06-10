@@ -2,10 +2,9 @@
 pragma solidity ^0.8.24;
 
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
-import { IWETH } from "../interfaces/IWETH.sol";
 import { IFundVault } from "../interfaces/IFundVault.sol";
 
-/// @dev Minimal interface to OmniOracle (Chainlink Functions client)
+/// @dev OmniOracle interface — stores 3-dimensional AI audit scores
 interface IOmniOracle {
     function requestAudit(
         uint256 projectId,
@@ -13,25 +12,32 @@ interface IOmniOracle {
         string  calldata bizApi
     ) external returns (bytes32 requestId);
 
-    /// @notice Returns score+1 after Chainlink callback completes.
-    ///         0 = not yet fulfilled; type(uint256).max = callback failed; else score+1 (0-101)
+    /// @notice Returns raw score sentinel after Chainlink callback.
+    ///         0 = not yet fulfilled; type(uint256).max = callback failed; else finalScore+1 (0-101)
     function fulfilledScore(uint256 projectId) external view returns (uint256);
 
-    /// @notice Returns the SHA-256 content hash stored by the Chainlink callback.
+    /// @notice Returns the 3D breakdown scores: reliability, quality, marketFit (0-100 each)
+    function fulfilledScores(uint256 projectId)
+        external view
+        returns (uint8 reliability, uint8 quality, uint8 marketFit);
+
+    /// @notice Returns the SHA-256 content hash stored by the Chainlink callback
     function fulfilledHash(uint256 projectId) external view returns (bytes32);
 }
 
-/// @title InvestmentManager — Project application, AI audit via Chainlink Functions, and payout
-/// @notice v2: Chainlink Functions triggers 0G Compute AI audit — no separate AI service required.
+/// @title InvestmentManager — AI-Agent-Driven VC Fund Investment Pipeline
+/// @notice AI agents (not human analysts) submit projects for multi-dimensional scoring.
 ///
 /// Audit flow:
-///   1. submitProject() → sets status Auditing → calls OmniOracle.requestAudit()
-///   2. Chainlink DON executes audit-source.js (calls 0G Compute × 3 rounds)
-///   3. fulfillAudit() callback → if score ≥ threshold → PendingExecution (timelock)
-///   4. After timelock, anyone calls executeInvestment() → funds flow with vesting
+///   1. submitProject() — AI agent submits via agentDid + agentRepo
+///   2. OmniOracle triggers Chainlink DON → 0G Compute A2A audit
+///   3. settleAudit() — reads 3D scores from oracle, queues if approved
+///   4. executeInvestment() — permissionless after EXECUTION_DELAY timelock
 ///
-/// Veto window: RISK_AGENT role can veto during the 72h timelock.
-/// Vesting model: 20% upfront at execution, 80% linear over 52 weeks.
+/// 3D Score model (via Stylus ScoringEngine, 40/30/30 weights):
+///   reliability 40% — agent uptime, latency, error rate
+///   quality     30% — code / output quality
+///   marketFit   30% — business / market-fit signal
 contract InvestmentManager is AccessControl {
     // ─── Roles ───────────────────────────────────────────────────────────────
     bytes32 public constant AI_ORACLE_ROLE  = keccak256("AI_ORACLE_ROLE");
@@ -40,50 +46,40 @@ contract InvestmentManager is AccessControl {
     // ─── Project Status ──────────────────────────────────────────────────────
     enum ProjectStatus {
         None,              // 0
-        Pending,           // 1
-        Auditing,          // 2  waiting for Chainlink DON / 0G Compute
+        Pending,           // 1  (unused — submitProject goes straight to Auditing)
+        Auditing,          // 2  waiting for oracle
         PendingExecution,  // 3  AI approved; waiting for timelock
         Rejected,          // 4  score below threshold or audit failed
-        Active,            // 5  investment executed
+        Active,            // 5  investment executed, vesting live
         CircuitBroken,     // 6  emergency halt
         Exited,            // 7  project returned capital
         WriteOff,          // 8  total loss
-        Vetoed             // 9  blocked during timelock window
+        Vetoed             // 9  blocked during timelock
     }
 
     // ─── Project Data ────────────────────────────────────────────────────────
-    //
-    // Storage layout (slots relative to mapping base for a given projectId):
-    //   slot 0 : applicant (address, 20 bytes)
-    //   slot 1 : commitHash (bytes32)
-    //   slot 2 : contractAddr (address, 20 bytes)
-    //   slot 3 : bizApi (string length; data at keccak256(slot3))
-    //   slot 4 : status(uint8) | auditScore(uint8) | submittedAt(uint40)
-    //            | auditedAt(uint40) | investedAt(uint40)
-    //            | executionUnlocksAt(uint40) | exitedAt(uint40)  [27 bytes total, 1 SSTORE]
-    //   slot 5 : requestedAmount (uint256)
-    //   slot 6 : auditContentHash (bytes32)
-    //   slot 7 : investmentAmount (uint256)
-    //   slot 8 : releasedAmount (uint256)
-    //   slot 9 : exitProceeds (uint256)
-    //
-    // Packing slot 4 means fulfillAudit() writes status+auditScore+auditedAt+executionUnlocksAt
-    // all into ONE already-warm slot → only ~12k gas vs ~66k gas for four cold SSTOREs.
     struct Project {
-        // ── identity (slots 0-3) ───────────────────────────────────────────
-        address applicant;
-        bytes32 commitHash;
-        address contractAddr;
-        string  bizApi;
-        // ── packed slot 4 (27 / 32 bytes) ─────────────────────────────────
-        ProjectStatus status;           // uint8  — 1 byte
-        uint8         auditScore;       // 0-100  — 1 byte
-        uint40        submittedAt;      // unix timestamp — 5 bytes
-        uint40        auditedAt;        // unix timestamp — 5 bytes
-        uint40        investedAt;       // unix timestamp — 5 bytes
-        uint40        executionUnlocksAt; // unix timestamp — 5 bytes
-        uint40        exitedAt;         // unix timestamp — 5 bytes
-        // ── large value slots (5-9) ────────────────────────────────────────
+        // Identity
+        address applicant;       // AI agent's address or project owner
+        bytes32 commitHash;      // keccak256 of pitch/source
+        address contractAddr;    // project's contract or wallet
+        string  bizApi;          // business context for AI prompt
+        // AI Agent metadata
+        string  agentDid;        // decentralized identifier of the submitting agent
+        string  agentRepo;       // git repo / IPFS CID of agent code
+        string  agentApiEndpoint; // REST/gRPC endpoint for A2A calls
+        // Packed timing + status slot
+        ProjectStatus status;
+        uint8  auditScore;       // final weighted score 0-100
+        uint8  reliabilityScore; // dimension 1: reliability
+        uint8  qualityScore;     // dimension 2: code/output quality
+        uint8  marketFitScore;   // dimension 3: market fit
+        uint40 submittedAt;
+        uint40 auditedAt;
+        uint40 investedAt;
+        uint40 executionUnlocksAt;
+        uint40 exitedAt;
+        // Values
         uint256 requestedAmount;
         bytes32 auditContentHash;
         uint256 investmentAmount;
@@ -96,14 +92,13 @@ contract InvestmentManager is AccessControl {
     uint256 public projectCount;
     mapping(uint256 => bytes)   public vestingSchedules;
 
-    IFundVault   public immutable fundVault;
-    IWETH        public immutable WETH;
-    IOmniOracle  public oracle;            // Chainlink Functions oracle (settable post-deploy)
+    IFundVault  public immutable fundVault;
+    IOmniOracle public oracle;          // settable post-deploy
 
     // ─── Parameters ─────────────────────────────────────────────────────────
     uint256 public scoreThreshold;
-    uint256 public constant EXECUTION_DELAY  = 3 minutes;  // demo: 3 min; prod: 72h
-    uint256 public constant UPFRONT_BPS      = 2000;        // 20% upfront
+    uint256 public constant EXECUTION_DELAY  = 3 minutes;  // demo; prod = 72h
+    uint256 public constant UPFRONT_BPS      = 2000;       // 20% upfront
     uint256 public constant VESTING_DURATION = 52 weeks;
 
     // ─── Events ─────────────────────────────────────────────────────────────
@@ -112,25 +107,27 @@ contract InvestmentManager is AccessControl {
         address indexed applicant,
         bytes32 commitHash,
         address contractAddr,
-        uint256 requestedAmount
+        uint256 requestedAmount,
+        string  agentDid
     );
-    event AuditRequested(
-        uint256 indexed projectId,
-        bytes32 chainlinkRequestId
-    );
+    event AuditRequested(uint256 indexed projectId, bytes32 chainlinkRequestId);
     event AuditCompleted(
         uint256 indexed projectId,
-        uint256 score,
+        uint8 finalScore,
+        uint8 reliability,
+        uint8 quality,
+        uint8 marketFit,
         bytes32 contentHash
     );
     event AuditFailed(uint256 indexed projectId);
-    event ExecutionQueued(uint256 indexed projectId, uint256 unlocksAt, uint256 score);
+    event ExecutionQueued(uint256 indexed projectId, uint256 unlocksAt, uint8 score);
     event ExecutionVetoed(uint256 indexed projectId, address indexed vetoer);
     event InvestmentExecuted(uint256 indexed projectId, uint256 amount, uint256 upfront);
     event PayoutClaimed(uint256 indexed projectId, uint256 amount);
     event CircuitBroken(uint256 indexed projectId);
     event ProjectExited(uint256 indexed projectId, uint256 proceeds, bool isProfit);
     event ProjectWriteOff(uint256 indexed projectId, uint256 originalAmount);
+    event ScoreThresholdUpdated(uint256 oldThreshold, uint256 newThreshold);
 
     // ─── Errors ─────────────────────────────────────────────────────────────
     error InvalidStatus();
@@ -140,19 +137,16 @@ contract InvestmentManager is AccessControl {
     error TimelockExpired();
     error OracleNotSet();
     error InvalidThreshold();
-    error NotLP();          // caller holds no FundVault shares
+    error NotLP();
 
     // ─── Constructor ────────────────────────────────────────────────────────
-    constructor(address _fundVault, address _weth, uint256 _scoreThreshold) {
-        fundVault       = IFundVault(_fundVault);
-        WETH            = IWETH(_weth);
-        scoreThreshold  = _scoreThreshold == 0 ? 60 : _scoreThreshold;  // default 60 (out of 100)
+    constructor(address _fundVault, uint256 _scoreThreshold) {
+        fundVault      = IFundVault(_fundVault);
+        scoreThreshold = _scoreThreshold == 0 ? 60 : _scoreThreshold;
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     // ─── Admin ──────────────────────────────────────────────────────────────
-    event ScoreThresholdUpdated(uint256 oldThreshold, uint256 newThreshold);
-
     function setOracle(address _oracle) external onlyRole(DEFAULT_ADMIN_ROLE) {
         oracle = IOmniOracle(_oracle);
     }
@@ -163,38 +157,46 @@ contract InvestmentManager is AccessControl {
         scoreThreshold = newThreshold;
     }
 
-    // ─── ETH Reception ─────────────────────────────────────────────────────
     receive() external payable {}
 
     // ─── Project Submission ─────────────────────────────────────────────────
-    /// @notice Submit a project for AI audit.
-    ///         Immediately triggers a Chainlink Functions request to 0G Compute.
-    /// @param commitHash      keccak256 of the pitch deck / source code
-    /// @param contractAddr    project's contract or wallet address
-    /// @param bizApi          business context URL or description for AI prompt
-    /// @param requestedAmount ETH (in wei) requested for investment
+    /// @notice Submit an AI agent project for audit.
+    /// @param commitHash       keccak256 of pitch/source code
+    /// @param contractAddr     project's contract or wallet address
+    /// @param bizApi           business context URL for AI prompt
+    /// @param requestedAmount  ETH (in wei) requested
+    /// @param agentDid         decentralized identifier of the AI agent
+    /// @param agentRepo        git / IPFS repo of agent code
+    /// @param agentApiEndpoint REST/gRPC endpoint exposed by the agent
     function submitProject(
         bytes32 commitHash,
         address contractAddr,
         string  calldata bizApi,
-        uint256 requestedAmount
+        uint256 requestedAmount,
+        string  calldata agentDid,
+        string  calldata agentRepo,
+        string  calldata agentApiEndpoint
     ) external returns (uint256 projectId) {
         if (commitHash == bytes32(0) || contractAddr == address(0)) revert ZeroAmount();
         if (address(oracle) == address(0)) revert OracleNotSet();
 
         projectId = ++projectCount;
         Project storage p = projects[projectId];
-        p.applicant       = msg.sender;
-        p.commitHash      = commitHash;
-        p.contractAddr    = contractAddr;
-        p.bizApi          = bizApi;
-        p.requestedAmount = requestedAmount;
-        p.status          = ProjectStatus.Auditing;
-        p.submittedAt     = uint40(block.timestamp);
+        p.applicant        = msg.sender;
+        p.commitHash       = commitHash;
+        p.contractAddr     = contractAddr;
+        p.bizApi           = bizApi;
+        p.requestedAmount  = requestedAmount;
+        p.agentDid         = agentDid;
+        p.agentRepo        = agentRepo;
+        p.agentApiEndpoint = agentApiEndpoint;
+        p.status           = ProjectStatus.Auditing;
+        p.submittedAt      = uint40(block.timestamp);
 
-        emit ProjectSubmitted(projectId, msg.sender, commitHash, contractAddr, requestedAmount);
+        emit ProjectSubmitted(
+            projectId, msg.sender, commitHash, contractAddr, requestedAmount, agentDid
+        );
 
-        // Request AI audit from Chainlink Functions → 0G Compute
         bytes32 clRequestId = oracle.requestAudit(
             projectId,
             _bytes32ToHex(commitHash),
@@ -203,14 +205,8 @@ contract InvestmentManager is AccessControl {
         emit AuditRequested(projectId, clRequestId);
     }
 
-    // ─── Settle Audit (two-transaction pattern) ─────────────────────────────
-
-    /// @notice Permissionless finalizer — reads oracle's stored result and
-    ///         transitions the project from Auditing → PendingExecution / Rejected.
-    ///
-    ///         The Chainlink callback no longer calls IM directly (eliminates the
-    ///         63/64 sub-call gas risk). Anyone can call this once the oracle has
-    ///         stored the result (fulfilledScore[projectId] != 0).
+    // ─── Settle Audit ───────────────────────────────────────────────────────
+    /// @notice Permissionless finalizer — reads oracle and transitions status.
     function settleAudit(uint256 projectId) external {
         Project storage p = projects[projectId];
         if (p.status != ProjectStatus.Auditing) revert InvalidStatus();
@@ -225,38 +221,43 @@ contract InvestmentManager is AccessControl {
             return;
         }
 
-        uint256 score     = raw - 1; // undo the +1 sentinel
-        bytes32 hash      = oracle.fulfilledHash(projectId);
+        uint256 finalScore = raw - 1; // undo +1 sentinel
+        bytes32 hash       = oracle.fulfilledHash(projectId);
 
-        p.auditScore       = uint8(score > 100 ? 100 : score);
+        // Read 3D breakdown scores
+        (uint8 rel, uint8 qual, uint8 mkt) = oracle.fulfilledScores(projectId);
+
+        p.auditScore       = uint8(finalScore > 100 ? 100 : finalScore);
+        p.reliabilityScore = rel;
+        p.qualityScore     = qual;
+        p.marketFitScore   = mkt;
         p.auditContentHash = hash;
         p.auditedAt        = uint40(block.timestamp);
 
-        emit AuditCompleted(projectId, score, hash);
+        emit AuditCompleted(projectId, p.auditScore, rel, qual, mkt, hash);
 
-        if (score >= scoreThreshold) {
+        if (finalScore >= scoreThreshold) {
             p.status             = ProjectStatus.PendingExecution;
             p.executionUnlocksAt = uint40(block.timestamp + EXECUTION_DELAY);
-            emit ExecutionQueued(projectId, uint256(p.executionUnlocksAt), score);
+            emit ExecutionQueued(projectId, uint256(p.executionUnlocksAt), p.auditScore);
         } else {
             p.status = ProjectStatus.Rejected;
         }
     }
 
-    // ─── Veto (during timelock window) ──────────────────────────────────────
-    /// @notice Any LP (FundVault depositor) may veto during the execution timelock.
-    ///         Replaces the old RISK_AGENT_ROLE gate — LP governance > admin gate.
+    // ─── Veto ───────────────────────────────────────────────────────────────
+    /// @notice Any LP may veto within the execution timelock window.
     function veto(uint256 projectId) external {
         if (fundVault.balanceOf(msg.sender) == 0) revert NotLP();
         Project storage p = projects[projectId];
-        if (p.status != ProjectStatus.PendingExecution)  revert InvalidStatus();
+        if (p.status != ProjectStatus.PendingExecution) revert InvalidStatus();
         if (block.timestamp >= uint256(p.executionUnlocksAt)) revert TimelockExpired();
         p.status = ProjectStatus.Vetoed;
         emit ExecutionVetoed(projectId, msg.sender);
     }
 
     // ─── Execute Investment ──────────────────────────────────────────────────
-    /// @notice Permissionless after timelock. Sends 20% upfront; 80% vests linearly.
+    /// @notice Permissionless after timelock. Vault sends ETH directly (no WETH needed).
     function executeInvestment(
         uint256 projectId,
         uint256 amount,
@@ -267,8 +268,8 @@ contract InvestmentManager is AccessControl {
         if (block.timestamp < uint256(p.executionUnlocksAt)) revert TimelockActive();
         if (amount == 0) revert ZeroAmount();
 
+        // Vault sends ETH directly to InvestmentManager (no WETH unwrap needed)
         fundVault.divestForInvestment(amount);
-        WETH.withdraw(amount);
 
         uint256 upfront = amount * UPFRONT_BPS / 10_000;
         (bool ok, ) = p.applicant.call{value: upfront}("");
@@ -307,7 +308,7 @@ contract InvestmentManager is AccessControl {
         uint256 total      = p.investmentAmount;
         uint256 upfront    = total * UPFRONT_BPS / 10_000;
         uint256 linearPart = total - upfront;
-        uint256 elapsed    = block.timestamp - p.investedAt;
+        uint256 elapsed    = block.timestamp - uint256(p.investedAt);
         uint256 linearVested = elapsed >= VESTING_DURATION
             ? linearPart
             : linearPart * elapsed / VESTING_DURATION;
@@ -324,20 +325,23 @@ contract InvestmentManager is AccessControl {
         emit CircuitBroken(projectId);
     }
 
-    // ─── Exit & Write-Off ───────────────────────────────────────────────────
+    // ─── Exit & Write-Off ────────────────────────────────────────────────────
     function markExit(uint256 projectId, uint256 exitProceeds)
         external payable onlyRole(DEFAULT_ADMIN_ROLE)
     {
         Project storage p = projects[projectId];
         if (p.status != ProjectStatus.Active && p.status != ProjectStatus.CircuitBroken)
             revert InvalidStatus();
+
         p.status       = ProjectStatus.Exited;
         p.exitedAt     = uint40(block.timestamp);
         p.exitProceeds = exitProceeds;
-        bool isProfit  = exitProceeds >= p.investmentAmount;
+
+        bool isProfit = exitProceeds >= p.investmentAmount;
         if (isProfit && msg.value > 0) {
-            WETH.deposit{value: msg.value}();
-            WETH.transfer(address(fundVault), msg.value);
+            // Return ETH gains to vault
+            (bool ok, ) = address(fundVault).call{value: msg.value}("");
+            require(ok, "ETH transfer failed");
             fundVault.addRealizedGains(msg.value, p.investmentAmount);
         } else {
             fundVault.addRealizedLoss(exitProceeds, p.investmentAmount);
@@ -351,12 +355,14 @@ contract InvestmentManager is AccessControl {
         Project storage p = projects[projectId];
         if (p.status != ProjectStatus.Active && p.status != ProjectStatus.CircuitBroken)
             revert InvalidStatus();
+
         uint256 invested = p.investmentAmount;
         uint256 proceeds = invested * simulatedReturnBps / 10_000;
         p.status       = ProjectStatus.Exited;
         p.exitedAt     = uint40(block.timestamp);
         p.exitProceeds = proceeds;
-        bool isProfit  = proceeds >= invested;
+
+        bool isProfit = proceeds >= invested;
         if (isProfit) {
             fundVault.addRealizedGains(proceeds - invested, invested);
         } else {
@@ -385,15 +391,21 @@ contract InvestmentManager is AccessControl {
         released  = p.releasedAmount;
         claimable = getClaimableAmount(projectId);
         if (total == 0 || p.investedAt == 0) return (0, 0, released, total);
-        uint256 elapsed    = block.timestamp - p.investedAt;
+        uint256 elapsed    = block.timestamp - uint256(p.investedAt);
         uint256 elapsedBps = elapsed >= VESTING_DURATION ? 10_000 : elapsed * 10_000 / VESTING_DURATION;
         vestedBps = UPFRONT_BPS + (10_000 - UPFRONT_BPS) * elapsedBps / 10_000;
     }
 
-    // ─── Private Helpers ─────────────────────────────────────────────────────
+    /// @notice Get full 3D audit scores for a project
+    function getAuditScores(uint256 projectId)
+        external view
+        returns (uint8 finalScore, uint8 reliability, uint8 quality, uint8 marketFit)
+    {
+        Project memory p = projects[projectId];
+        return (p.auditScore, p.reliabilityScore, p.qualityScore, p.marketFitScore);
+    }
 
-    /// @dev Converts bytes32 to its 0x-prefixed lowercase hex string representation.
-    ///      Used to pass the commit hash as a readable string to the Chainlink JS source.
+    // ─── Private Helpers ─────────────────────────────────────────────────────
     function _bytes32ToHex(bytes32 b) internal pure returns (string memory) {
         bytes memory hex_ = new bytes(66);
         hex_[0] = "0"; hex_[1] = "x";

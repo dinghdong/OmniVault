@@ -1,8 +1,8 @@
 # OmniVault
 
-**AI-Powered Decentralized Venture Capital — Built on 0G**
+**AI-Powered Decentralized Venture Capital — Built for Arbitrum**
 
-> OmniVault is a decentralized VC fund where LP capital earns yield via AAVE V3 while a council of on-chain AI agents continuously audits Web3 projects seeking funding. Every investment decision is verifiable, every audit report is immutable, and every fund movement is governed by smart contracts.
+> OmniVault is a decentralized VC fund where LP capital is managed by multi-agent AI systems that audit Web3 projects 24/7. Every investment decision is verifiable on-chain, every audit score is computed by a Chainlink DON calling 0G Compute, and every fund movement is enforced by smart contracts — no human gatekeepers.
 
 ---
 
@@ -10,81 +10,102 @@
 
 1. [Overview](#overview)
 2. [Architecture](#architecture)
-3. [Smart Contracts](#smart-contracts)
-4. [AI Agent System](#ai-agent-system)
-5. [0G Stack Integration](#0g-stack-integration)
+3. [3D AI Scoring Model](#3d-ai-scoring-model)
+4. [Smart Contracts](#smart-contracts)
+5. [A2A Audit Flow](#a2a-audit-flow)
 6. [LP Mechanics](#lp-mechanics)
 7. [Investment Lifecycle](#investment-lifecycle)
 8. [Governance & Safety](#governance--safety)
-9. [Deployed Contracts (0G Galileo Testnet)](#deployed-contracts-0g-galileo-testnet)
+9. [Deployed Contracts (Arbitrum Sepolia)](#deployed-contracts-arbitrum-sepolia)
 10. [Setup & Development](#setup--development)
-11. [Project Structure](#project-structure)
+11. [Testing](#testing)
+12. [Demo Agent](#demo-agent)
+13. [Project Structure](#project-structure)
 
 ---
 
 ## Overview
 
-OmniVault removes human bias from venture capital. Instead of a committee deciding which Web3 projects receive funding, three specialized AI agents conduct independent due diligence — then debate their findings across three rounds before committing a consensus score on-chain.
+OmniVault removes human bias from venture capital. AI agents conduct independent due diligence and submit scores on-chain via Chainlink Functions. A **Rust/Wasm ScoringEngine** (Arbitrum Stylus) verifies the weighted formula. Reports are stored immutably on **0G Storage**.
 
 **Key properties:**
 
 | Property | Mechanism |
 |---|---|
-| Yield while waiting | LP deposits → WETH → AAVE V3 aWETH |
-| Tamper-proof audits | Reports stored on **0G Storage**, Merkle root recorded on-chain |
-| AI inference on 0G | **BusinessAnalysisAgent** routes through **0G Compute** (DeepSeek-V3) |
-| Community protection | 48 h LP veto window before any funds leave the vault |
-| Vesting | 20 % upfront + 80 % linear 52-week vest in the contract |
-| Dead-man safety | `DeadManSwitch.sol` triggers fund recovery if projects go dark |
+| ETH-only vault | LP deposits held as raw ETH, no AAVE |
+| 3D AI scoring | Reliability (40%) + Quality (30%) + Market Fit (30%) |
+| Chainlink DON | `audit-source.js` calls 0G Compute → returns 160-byte result |
+| Stylus verification | `ScoringEngine.sol` (Rust/Wasm) enforces weighted formula |
+| Two-tx audit | `submitProject()` → oracle callback → `settleAudit()` |
+| A2A provenance | Every submission carries `agentDid`, `agentRepo`, `agentApiEndpoint` |
+| Timelock execution | 3-minute timelock before `executeInvestment()` |
+| LP veto window | Community can veto any investment before execution |
+| Revenue sharing | MasterChef-style O(1) distribution to LPs |
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                    Frontend  (Next.js 14)                     │
-│   LP Dashboard  │  Audit Pipeline  │  Apply  │  Portfolio    │
-└─────────────────────────┬────────────────────────────────────┘
-              wagmi v2 / viem / ConnectKit
-┌─────────────────────────▼────────────────────────────────────┐
-│                  0G Galileo Testnet (EVM)                     │
-│                                                              │
-│  ┌─────────────┐  ┌─────────────┐  ┌──────────────────────┐  │
-│  │  FundVault  │  │  FundToken  │  │  InvestmentManager   │  │
-│  │  AAVE V3    │  │  Rebasing   │  │  Project lifecycle   │  │
-│  │  ETH yield  │  │  ERC-20     │  │  Vesting/claimPayout │  │
-│  └─────────────┘  └─────────────┘  └──────────────────────┘  │
-│  ┌─────────────┐  ┌─────────────┐  ┌──────────────────────┐  │
-│  │ AgentVoting │  │AgentRegistry│  │   DeadManSwitch      │  │
-│  │ Quorum/veto │  │  3 agents   │  │   30d ping window    │  │
-│  └─────────────┘  └─────────────┘  └──────────────────────┘  │
-└─────────────────────────┬────────────────────────────────────┘
-              On-chain events / ethers.js
-┌─────────────────────────▼────────────────────────────────────┐
-│                    AI Service  (Node.js/Express)              │
-│                                                              │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │              DebateOrchestrator                        │  │
-│  │  Round 1: Independent parallel analysis               │  │
-│  │  Round 2: Cross-peer review (LLM-mediated)            │  │
-│  │  Round 3: Final synthesis → consensus score           │  │
-│  │  Each round → 0G Storage (Merkle root on-chain)       │  │
-│  └────────────────────────────────────────────────────────┘  │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────────────┐  │
-│  │ CodeAnalysis │ │RiskAssessment│ │  BusinessAnalysis    │  │
-│  │    Agent     │ │    Agent     │ │ Agent (0G Compute)   │  │
-│  └──────────────┘ └──────────────┘ └──────────────────────┘  │
-│                                                              │
-│  MonitoringAgent (6 h)  │  DeadManPinger (24 h)            │
-└─────────────────────────┬────────────────────────────────────┘
-              0G Storage SDK / 0G Compute API
-┌─────────────────────────▼────────────────────────────────────┐
-│                      0G Network                              │
-│  0G Storage (immutable audit archives)                       │
-│  0G Compute  (DeepSeek-V3 / Qwen3 inference)                │
-└──────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                      Frontend  (Next.js 14)                       │
+│  LP Dashboard │ AI Audit Pipeline │ Apply (A2A) │ Portfolio       │
+└──────────────────────────┬───────────────────────────────────────┘
+               wagmi v2 / viem / ConnectKit
+┌──────────────────────────▼───────────────────────────────────────┐
+│                    Arbitrum (Sepolia / One)                        │
+│                                                                   │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────────────────┐   │
+│  │  FundVault   │  │  FundToken   │  │  InvestmentManager    │   │
+│  │  ETH-only    │  │  Rebasing    │  │  Project lifecycle    │   │
+│  │  no AAVE     │  │  ERC-20      │  │  settleAudit / exec   │   │
+│  └──────────────┘  └──────────────┘  └───────────────────────┘   │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────────────────┐   │
+│  │  OmniOracle  │  │ScoringEngine │  │   RevenueShare        │   │
+│  │  Chainlink   │  │Arbitrum      │  │   MasterChef O(1)     │   │
+│  │  Functions   │  │Stylus (Rust) │  │   distribution        │   │
+│  └──────────────┘  └──────────────┘  └───────────────────────┘   │
+└──────────────────────────┬───────────────────────────────────────┘
+         Chainlink DON → audit-source.js
+┌──────────────────────────▼───────────────────────────────────────┐
+│                      0G Network / External                         │
+│  0G Compute  (DeepSeek-V3 / Qwen3 — AI scoring inference)        │
+│  0G Storage  (immutable audit report archives)                    │
+│  Chainlink Functions DON (trustless off-chain compute)            │
+└──────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 3D AI Scoring Model
+
+OmniVault uses a three-dimensional scoring model that replaces the old single `auditScore`:
+
+| Dimension | Weight | Description |
+|---|---|---|
+| **Reliability** | 40% | Smart contract security, code quality, test coverage |
+| **Quality** | 30% | Implementation completeness, architecture soundness |
+| **Market Fit** | 30% | Business model viability, tokenomics, competitive moat |
+
+**Weighted formula:**
+
+```
+finalScore = (reliability × 4000 + quality × 3000 + marketFit × 3000) / 10000
+```
+
+This formula is enforced on-chain by the **ScoringEngine** (Arbitrum Stylus, Rust/Wasm).
+
+### Chainlink Oracle Response Format
+
+The `audit-source.js` script returns a 160-byte ABI-encoded payload:
+
+| Offset | Word | Field | Type |
+|---|---|---|---|
+| 0 | Word 0 | `finalScore` | uint256 (0–100) |
+| 32 | Word 1 | `reliabilityScore` | uint256 (0–100) |
+| 64 | Word 2 | `qualityScore` | uint256 (0–100) |
+| 96 | Word 3 | `marketFitScore` | uint256 (0–100) |
+| 128 | Word 4 | `contentHash` | bytes32 (0G Storage root) |
 
 ---
 
@@ -92,11 +113,11 @@ OmniVault removes human bias from venture capital. Instead of a committee decidi
 
 ### `vault/FundVault.sol`
 
-LP deposit/redemption hub. Wraps ETH → WETH → supplies to AAVE V3 for aWETH yield.
+ETH-only LP vault. No AAVE, no WETH wrapping.
 
-- `deposit()` — payable, returns FundToken shares
+- `deposit()` — payable, mints FundToken shares
 - `redeem(shares)` — burns shares, returns ETH pro-rata
-- Role-based: `INVESTOR_ROLE` for investment execution
+- `vaultBalance()` — returns `address(this).balance`
 
 ### `vault/FundToken.sol`
 
@@ -104,117 +125,97 @@ Rebasing ERC-20 modelled after aTokens.
 
 - `balanceOf(user) = shares[user] × accrualFactor / 1e18`
 - `getShares(user)` — raw share count (fixed at deposit)
-- `accrualFactor` rises as AAVE yield accrues, increasing every holder's balance
+- `accrualFactor` rises as AI investments return proceeds to vault
 
 ### `investment/InvestmentManager.sol`
 
-Full project lifecycle: submission → audit → community window → investment → vesting.
+Full project lifecycle: submission → oracle → settle → timelock → execution.
 
 | Function | Access | Description |
 |---|---|---|
-| `submitProject(commitHash, contractAddr, bizApi, requestedAmount)` | public | Opens a new project slot |
-| `fulfillAudit(projectId, score, scoreLow, scoreHigh, reportHash)` | AI_ORACLE_ROLE | Records audit result |
-| `fulfillAuditFailure(projectId, reason)` | AI_ORACLE_ROLE | Records rejection or veto |
-| `executeInvestment(projectId, amount, vestingSchedule)` | INVESTOR_ROLE | Sends 20 % upfront, holds 80 % for vesting |
-| `claimPayout(projectId)` | applicant | Pulls vested ETH from the contract |
-| `vestingProgress(projectId)` | view | Returns vestedBps, claimable, released, total |
-| `simulateExit(projectId, simulatedReturnBps)` | admin | Test-mode exit trigger |
-| `triggerCircuitBreak(projectId, severity)` | MONITOR_ROLE | Halts active project on anomaly |
+| `submitProject(commitHash, contractAddr, bizApi, requestedAmount, agentDid, agentRepo, agentApiEndpoint)` | public | Opens a new project slot with A2A provenance |
+| `settleAudit(projectId)` | permissionless | Reads oracle result, updates project status |
+| `executeInvestment(projectId, amount, data)` | permissionless (after timelock) | Sends ETH to funded project |
+| `getAuditScores(projectId)` | view | Returns `(finalScore, reliability, quality, marketFit)` |
+| `scoreThreshold()` | view | Minimum finalScore to pass (default: 60) |
+| `EXECUTION_DELAY()` | view | Timelock duration (3 minutes on testnet) |
 
-**Vesting model:** `UPFRONT_BPS = 2000` (20 % sent at `executeInvestment`). The remaining 80 % vests linearly over 52 weeks from `investedAt`. Applicants call `claimPayout` to pull their available tranche.
+**Project struct fields (v2):**
+```
+applicant, commitHash, contractAddr, bizApi,
+agentDid, agentRepo, agentApiEndpoint,        ← A2A identity
+status, auditScore, reliabilityScore, qualityScore, marketFitScore,
+submittedAt, auditedAt, investedAt, executionUnlocksAt, exitedAt,
+requestedAmount, auditContentHash,
+investmentAmount, releasedAmount, exitProceeds
+```
 
-### `governance/AgentVoting.sol`
+### `oracle/OmniOracle.sol`
 
-On-chain ballot box for the three AI agents.
+Chainlink Functions client. Requests AI audit on-chain, fulfills with 3D scores.
 
-- Agents submit `vote(projectId, approved, score, scoreLow, scoreHigh, reasoningHash)`
-- Quorum = all registered agents; stores Merkle root of debate report
-- On quorum: opens 48 h community veto window (`communityWindowEnd`)
-- `communityVeto(projectId)` — any LP can veto within the window
-- `triggerExecution(projectId)` — permissionless after window closes without veto
+- `requestAudit(projectId)` — triggers DON execution of `audit-source.js`
+- `_fulfillRequest()` — decodes 160-byte response, stores scores
+- `fulfilledScores(projectId)` → `(reliability, quality, marketFit)`
+- `fulfilledScore(projectId)` → finalScore sentinel (score+1, 0 = unfulfilled)
 
-### `governance/DeadManSwitch.sol`
+### `oracle/MockOmniOracleV2.sol`
 
-Permissionless safety net for funded projects.
+Demo/test oracle without Chainlink dependency.
 
-- `PING_WINDOW = 30 days` — projects must ping every 30 days
-- `GRACE_PERIOD = 30 days` — extra grace after the window expires
-- `ping(projectId, commitHash)` — permissionless heartbeat
-- `triggerDeadSwitch(projectId)` — permissionless; callable after `PING_WINDOW + GRACE_PERIOD`
-- `isTriggerable(projectId)` — view helper
+- `setResult(projectId, finalScore, reliability, quality, marketFit, contentHash)` — admin only
+- Same interface as OmniOracle — `InvestmentManager` reads it the same way
+
+### `stylus/ScoringEngine` (Rust/Wasm — Arbitrum Stylus)
+
+On-chain weighted scoring computation in Rust, compiled to Wasm.
+
+- `computeScore(reliability, quality, marketFit)` → `finalScore`
+- Deployed at `0xeb07843c0423208a087460bcc1ee6ec9de8d6566` on Arbitrum Sepolia
+- Formula: `(r * 4000 + q * 3000 + m * 3000) / 10000`
+
+### `revenue/RevenueShare.sol`
+
+MasterChef-style O(1) ETH revenue distribution to LP token holders.
+
+- `deposit(amount)` — LP registers weight
+- `claimRevenue()` — pulls accrued ETH share
+- `revenuePerWeight` accumulator (scaled ×1e18) eliminates O(n) loops
 
 ---
 
-## AI Agent System
+## A2A Audit Flow
 
-### Three Specialized Agents
-
-| Agent | Analyses | Primary score |
-|---|---|---|
-| **CodeAnalysisAgent** | Smart contract security, code quality, test coverage | `securityScore` |
-| **RiskAssessmentAgent** | Rug-pull vectors, liquidity risks, team exposure | `riskScore` |
-| **BusinessAnalysisAgent** | Revenue model, tokenomics, governance, competitive moat | `sustainabilityScore` |
-
-### Three-Round Debate (`DebateOrchestrator`)
+OmniVault implements **Agent-to-Agent (A2A)** protocol for traceable autonomous investment.
 
 ```
-Round 1 — Independent (parallel)
-  Each agent analyses the project alone.
-  Results uploaded to 0G Storage → label: debate-r1-{projectId}
+1. AI Agent submits project
+   im.submitProject(
+     commitHash,
+     contractAddr,
+     bizApi,
+     requestedAmount,
+     "did:omni:agent:...",          ← agentDid (W3C DID)
+     "https://github.com/...",      ← agentRepo
+     "https://api.agent.ai/v1/...", ← agentApiEndpoint
+   )
 
-Round 2 — Cross-review (LLM-mediated)
-  Each agent sees peers' Round 1 summaries, revises its score.
-  Uploaded to 0G Storage → label: debate-r2-{projectId}
+2. Chainlink DON executes audit-source.js
+   → Calls 0G Compute (DeepSeek-V3)
+   → Returns 160-byte result with 3D scores + content hash
 
-Round 3 — Final synthesis (LLM-mediated)
-  All Round 2 data combined into final consensus score.
-  Uploaded to 0G Storage → label: debate-r3-{projectId}
-  Merkle root committed on-chain via AgentVoting
-```
+3. Oracle stores result
+   oracle.setResult() / OmniOracle._fulfillRequest()
 
-### Monitoring Agent
+4. Anyone settles
+   im.settleAudit(projectId)
+   → Reads oracle → updates status:
+     finalScore ≥ threshold → PendingExecution (timelock starts)
+     finalScore < threshold → Rejected
 
-`monitoringAgent.js` runs every 6 hours and checks every Active project:
-
-- **On-chain TX count growth** — baseline vs current
-- **GitHub commit activity** — via `bizApi` endpoint
-- On ≥ 2 anomalies: calls `triggerCircuitBreak(projectId, severity=10)`
-- Uploads per-project report + cycle summary to 0G Storage
-
-### Dead-Man Pinger
-
-`deadManPinger.js` runs every 24 hours:
-
-- Auto-registers newly Active projects in `DeadManSwitch`
-- Derives `commitHash = sha256(pid:bizApi:dayNumber)` for each ping
-- Gracefully skips if `DEAD_MAN_SWITCH_ADDRESS` is not set
-
----
-
-## 0G Stack Integration
-
-### 0G Storage
-
-Every audit artifact is stored immutably:
-
-| Artifact | Label |
-|---|---|
-| Round 1 debate JSON | `debate-r1-{projectId}` |
-| Round 2 cross-review JSON | `debate-r2-{projectId}` |
-| Round 3 synthesis JSON | `debate-r3-{projectId}` |
-| Monitoring cycle report | `monitor-cycle-{timestamp}` |
-| Per-project monitoring report | `monitor-{projectId}-{timestamp}` |
-
-The Merkle root of the final report is recorded on-chain in `AgentVoting.projectVotings[id].reportHash` — a tamper-proof link between the immutable storage layer and the smart contract.
-
-### 0G Compute
-
-`BusinessAnalysisAgent` routes inference through **0G Compute** (`https://router-api.0g.ai/v1`) using an OpenAI-compatible client. If `ZG_COMPUTE_API_KEY` is not configured, it falls back transparently to the primary LLM.
-
-```
-Default model: deepseek-ai/DeepSeek-V3
-Auth: Bearer app-sk-<SECRET>
-Fallback: OPENAI_BASE_URL / OPENAI_API_KEY
+5. After timelock
+   im.executeInvestment(projectId, amount, '0x')
+   → Status: Active
 ```
 
 ---
@@ -225,14 +226,13 @@ Fallback: OPENAI_BASE_URL / OPENAI_API_KEY
 
 ```
 User sends ETH → FundVault
-  ↳ ETH wraps to WETH
-  ↳ WETH supplied to AAVE V3 → aWETH yield begins
   ↳ FundToken shares minted proportional to accrualFactor
+  ↳ ETH held in vault (no AAVE)
 ```
 
 ### Yield Accrual
 
-`accrualFactor` is the single global exchange rate between shares and ETH value. As AAVE yield accumulates, `accrualFactor` rises — every holder's `balanceOf` increases automatically without any rebase transaction.
+`accrualFactor` rises when AI investments return proceeds. Every holder's `balanceOf` increases automatically.
 
 ```
 balanceOf(user) = shares[user] × accrualFactor / 1e18
@@ -240,16 +240,16 @@ balanceOf(user) = shares[user] × accrualFactor / 1e18
 
 ### LP Dashboard
 
-The dashboard shows:
 - Live FundToken (OVFT) holdings and ETH equivalent
-- Total TVL and LP pool share %
-- Compound-growth sparkline (SVG, derived from `accrualFactor`)
-- Portfolio health bar (Active / Pending / Troubled projects)
-- Alerts for any circuit-broken projects and ETH at risk
+- Vault TVL and LP pool share %
+- Rebasing sparkline (SVG, from `accrualFactor`)
+- Portfolio health bar (Active / Pending / Troubled)
+- Alerts for circuit-broken projects with ETH at risk
+- Exited investments P&L table
 
 ### Redeeming
 
-Call `FundVault.redeem(shares)` — pass **raw shares** from `getShares()`, not the ETH balance from `balanceOf()`. The contract withdraws aWETH from AAVE, unwraps to ETH, and sends pro-rata to the caller.
+Call `FundVault.redeem(shares)` — pass **raw shares** from `getShares()`, not `balanceOf()`.
 
 ---
 
@@ -257,34 +257,28 @@ Call `FundVault.redeem(shares)` — pass **raw shares** from `getShares()`, not 
 
 ```
 1. SUBMISSION
-   submitProject(commitHash, contractAddr, bizApi, requestedAmount)
+   submitProject(..., agentDid, agentRepo, agentApiEndpoint)
    Status: Pending
 
-2. AUDITING (on-chain listener detects ProjectSubmitted event)
-   DebateOrchestrator runs 3-round debate
-   Each round stored on 0G Storage
-   Agents vote on-chain via AgentVoting
+2. AUDITING
+   Chainlink DON executes audit-source.js
+   3D scores computed via 0G Compute
+   Oracle callback stores reliability/quality/marketFit
    Status: Auditing
 
-3. PENDING EXECUTION (quorum reached)
-   communityWindowEnd set (now + 48 h)
-   LP holders may call communityVeto() during this window
-   Status: PendingExecution
+3. SETTLEMENT (permissionless)
+   settleAudit(projectId)
+   ↳ score ≥ threshold → PendingExecution (timelock: 3 min testnet / 48h mainnet)
+   ↳ score < threshold → Rejected
 
-4. EXECUTION (after window closes without veto)
-   triggerExecution() → AgentVoting calls InvestmentManager
-   20 % ETH sent immediately to applicant
-   80 % held in contract for 52-week linear vest
+4. EXECUTION (after timelock)
+   executeInvestment(projectId, amount, data)
+   ETH sent to project
    Status: Active
 
-5. VESTING (applicant calls claimPayout periodically)
-   vestingProgress() shows vestedBps, claimable, released, total
-   claimPayout() transfers the unlocked tranche to applicant
-
-6. EXIT / CIRCUIT BREAK
-   simulateExit() (admin) — marks exited, records proceeds
-   triggerCircuitBreak() (MonitoringAgent) — halts disbursements
-   triggerDeadSwitch() (anyone) — after 60-day silence
+5. EXIT / CIRCUIT BREAK
+   exitInvestment() — marks exited, records proceeds, rebases vault
+   triggerCircuitBreak() — halts active project on anomaly
    Status: Exited / CircuitBroken / WriteOff
 ```
 
@@ -292,36 +286,36 @@ Call `FundVault.redeem(shares)` — pass **raw shares** from `getShares()`, not 
 
 ## Governance & Safety
 
-### Community Veto
+### LP Veto Window
 
-After AI quorum, LP holders have a 48-hour window to veto any investment. A single veto is sufficient — this gives the community a final human check on AI decisions. Vetoed projects move to `Vetoed` status and no funds are released.
+After audit approval, LP holders have a configurable veto window before execution. A single veto is sufficient to block the investment.
 
-### Agent Role Separation
+### Score Threshold
 
-Agents are wallets registered in `AgentRegistry`. `AgentVoting` only accepts votes from registered addresses (`AI_ORACLE_ROLE`). The three agents use distinct private keys, ensuring no single key can forge a quorum.
+`InvestmentManager.scoreThreshold()` — configurable minimum finalScore (default: 60 out of 100). Projects scoring below this are automatically rejected.
 
-### Dead-Man Switch
+### Execution Timelock
 
-If a funded project stops pinging `DeadManSwitch` for 60 days (30-day window + 30-day grace), anyone can call `triggerDeadSwitch()` to initiate fund recovery. The `deadManPinger.js` service automates the heartbeat so compliant projects are never accidentally triggered.
+`EXECUTION_DELAY` separates settlement from execution, giving LPs time to review and veto high-risk investments.
 
 ### Circuit Breaker
 
-`MonitoringAgent` watches on-chain TX volume and GitHub activity every 6 hours. If two or more anomaly checks fail for the same project, it calls `triggerCircuitBreak()`, immediately halting further vesting disbursements.
+Monitoring agents can call `triggerCircuitBreak(projectId)`, immediately halting further disbursements to a troubled project.
 
 ---
 
-## Deployed Contracts (0G Galileo Testnet)
+## Deployed Contracts (Arbitrum Sepolia)
 
-| Contract | Address |
-|---|---|
-| FundToken | [`0x77dde9441D7d03f30963dA9C0d17431017487AFe`](https://chainscan-galileo.0g.ai/address/0x77dde9441D7d03f30963dA9C0d17431017487AFe) |
-| FundVault | [`0x786897DDc85D592C116e870AC46f4c0e3c8f2F41`](https://chainscan-galileo.0g.ai/address/0x786897DDc85D592C116e870AC46f4c0e3c8f2F41) |
-| InvestmentManager | [`0x549d3A606C0Ff03F333D3c867A3A79c7d34f4888`](https://chainscan-galileo.0g.ai/address/0x549d3A606C0Ff03F333D3c867A3A79c7d34f4888) |
-| AgentRegistry | [`0x906eaF095b37978580E6cb5CD00b331e0B66D1aF`](https://chainscan-galileo.0g.ai/address/0x906eaF095b37978580E6cb5CD00b331e0B66D1aF) |
-| AgentVoting | [`0x4BdD5CeF85A36124992eC588952A7EFf057a3Ac8`](https://chainscan-galileo.0g.ai/address/0x4BdD5CeF85A36124992eC588952A7EFf057a3Ac8) |
-| DeadManSwitch | [`0x34a8856b4B688077A144B5c88C3481e542258C75`](https://chainscan-galileo.0g.ai/address/0x34a8856b4B688077A144B5c88C3481e542258C75) |
+| Contract | Address | Explorer |
+|---|---|---|
+| FundToken | `0x426eC35BfFDf5BFA74664Ce7Cd838341f93e4668` | [↗](https://sepolia.arbiscan.io/address/0x426eC35BfFDf5BFA74664Ce7Cd838341f93e4668) |
+| FundVault | `0xafE5c6Cf36B9aBB48fF31D60e9e28507636866A4` | [↗](https://sepolia.arbiscan.io/address/0xafE5c6Cf36B9aBB48fF31D60e9e28507636866A4) |
+| InvestmentManager | `0x87eB4bf34CF42205AC6F37BEB8317cAC937819a8` | [↗](https://sepolia.arbiscan.io/address/0x87eB4bf34CF42205AC6F37BEB8317cAC937819a8) |
+| MockOmniOracleV2 | `0x14C2f01e939Ae8ECa97bb44b47E566C81e78E209` | [↗](https://sepolia.arbiscan.io/address/0x14C2f01e939Ae8ECa97bb44b47E566C81e78E209) |
+| RevenueShare | `0x471806AA331c6D282cA13AbCcce2315E769389c5` | [↗](https://sepolia.arbiscan.io/address/0x471806AA331c6D282cA13AbCcce2315E769389c5) |
+| ScoringEngine (Stylus) | `0xeb07843c0423208a087460bcc1ee6ec9de8d6566` | [↗](https://sepolia.arbiscan.io/address/0xeb07843c0423208a087460bcc1ee6ec9de8d6566) |
 
-Network: **0G Galileo Testnet** · Chain ID: **16602** · Explorer: https://chainscan-galileo.0g.ai
+Network: **Arbitrum Sepolia** · Chain ID: **421614** · Explorer: https://sepolia.arbiscan.io
 
 ---
 
@@ -340,34 +334,12 @@ npx hardhat compile
 npx hardhat test
 ```
 
-### AI Service
+### Deploy to Arbitrum Sepolia
 
 ```bash
-cd ai-service
-npm install
-cp .env.example .env  # fill in keys
-
-# Required
-OPENAI_API_KEY=...         # or any OpenAI-compatible key
-OPENAI_BASE_URL=...        # optional, e.g. https://api.minimaxi.com/v1
-OPENAI_MODEL=...
-
-# 0G-specific
-ZG_STORAGE_PRIVATE_KEY=... # wallet for 0G Storage uploads
-ZG_EVM_RPC=https://evmrpc-testnet.0g.ai
-ZG_INDEXER_RPC=https://indexer-storage-testnet-turbo.0g.ai
-
-ZG_COMPUTE_API_KEY=        # optional: app-sk-... for 0G Compute inference
-ZG_COMPUTE_MODEL=deepseek-ai/DeepSeek-V3
-
-INVESTMENT_MANAGER_ADDRESS=0x549d3A606C0Ff03F333D3c867A3A79c7d34f4888
-AGENT_VOTING_ADDRESS=0x4BdD5CeF85A36124992eC588952A7EFf057a3Ac8
-DEAD_MAN_SWITCH_ADDRESS=0x34a8856b4B688077A144B5c88C3481e542258C75
-AGENT1_PRIVATE_KEY=...
-AGENT2_PRIVATE_KEY=...
-AGENT3_PRIVATE_KEY=...
-
-node src/server.js
+# Set PRIVATE_KEY in .env or environment
+npx hardhat run scripts/deploy-arb-sepolia.ts --network arbitrumSepolia
+# Auto-updates frontend/.env.local with new addresses
 ```
 
 ### Frontend
@@ -375,17 +347,76 @@ node src/server.js
 ```bash
 cd frontend
 npm install
-
-# frontend/.env.local
-NEXT_PUBLIC_FUND_VAULT_ADDRESS=0x786897DDc85D592C116e870AC46f4c0e3c8f2F41
-NEXT_PUBLIC_FUND_TOKEN_ADDRESS=0x77dde9441D7d03f30963dA9C0d17431017487AFe
-NEXT_PUBLIC_INVESTMENT_MANAGER_ADDRESS=0x549d3A606C0Ff03F333D3c867A3A79c7d34f4888
-NEXT_PUBLIC_AGENT_VOTING_ADDRESS=0x4BdD5CeF85A36124992eC588952A7EFf057a3Ac8
-NEXT_PUBLIC_AGENT_REGISTRY_ADDRESS=0x906eaF095b37978580E6cb5CD00b331e0B66D1aF
-NEXT_PUBLIC_CHAIN_ID=16602
-NEXT_PUBLIC_EXPLORER_URL=https://chainscan-galileo.0g.ai
-
 npm run dev   # http://localhost:3000
+```
+
+`frontend/.env.local` is auto-generated by the deploy script. Manual template:
+
+```env
+NEXT_PUBLIC_CHAIN_ID=421614
+NEXT_PUBLIC_FUND_TOKEN_ADDRESS=0x426eC35BfFDf5BFA74664Ce7Cd838341f93e4668
+NEXT_PUBLIC_FUND_VAULT_ADDRESS=0xafE5c6Cf36B9aBB48fF31D60e9e28507636866A4
+NEXT_PUBLIC_INVESTMENT_MANAGER_ADDRESS=0x87eB4bf34CF42205AC6F37BEB8317cAC937819a8
+NEXT_PUBLIC_OMNI_ORACLE_ADDRESS=0x14C2f01e939Ae8ECa97bb44b47E566C81e78E209
+NEXT_PUBLIC_REVENUE_SHARE_ADDRESS=0x471806AA331c6D282cA13AbCcce2315E769389c5
+NEXT_PUBLIC_SCORING_ENGINE_ADDRESS=0xeb07843c0423208a087460bcc1ee6ec9de8d6566
+```
+
+---
+
+## Testing
+
+### Hardhat unit + integration tests
+
+```bash
+npx hardhat test
+# 107+ tests covering FundVault, FundToken, InvestmentManager,
+# OmniOracle 3D scoring, RevenueShare, ScoringEngine interface
+```
+
+### OmniOracle 3D scoring tests (15 tests)
+
+```bash
+npx hardhat test test/OmniOracle.test.js
+```
+
+Covers: error path (err bytes, short response, unknown requestId), 5-word 160-byte format, legacy 2-word format, 32-byte score-only, unfulfilled project.
+
+### Chainlink audit-source simulation (8 checks)
+
+```bash
+# Requires GEMINI_API_KEY or OPENAI_API_KEY
+node chainlink/test-audit-source.js
+# Simulates DON execution locally:
+# Uint8Array, 160 bytes, all values in [0,100],
+# contentHash non-zero, weighted formula ±2 tolerance
+```
+
+---
+
+## Demo Agent
+
+`scripts/demo-agent.ts` simulates the full A2A audit pipeline on Arbitrum Sepolia:
+
+```bash
+npx hardhat run scripts/demo-agent.ts --network arbitrumSepolia
+```
+
+**Pipeline:**
+1. Checks vault balance, deposits 0.01 ETH if needed
+2. AI agent submits project with DID + repo + API endpoint
+3. Simulates Chainlink DON callback (reliability=88, quality=82, marketFit=75 → finalScore=82)
+4. Calls `settleAudit()` — status becomes PendingExecution
+5. Waits for 3-minute timelock
+6. Calls `executeInvestment()` — status becomes Active
+
+**Mock scores:**
+```
+reliability = 88  (×40% = 35.2)
+quality     = 82  (×30% = 24.6)
+marketFit   = 75  (×30% = 22.5)
+─────────────────────────────
+finalScore  = 82  ✓ (threshold: 60)
 ```
 
 ---
@@ -397,36 +428,28 @@ OmniVault/
 ├── contracts/
 │   ├── vault/                  FundVault.sol, FundToken.sol
 │   ├── investment/             InvestmentManager.sol
-│   ├── governance/             AgentVoting.sol, AgentRegistry.sol,
-│   │                           DeadManSwitch.sol
-│   ├── oracle/                 OmniOracle.sol, MPCGateway.sol
+│   ├── oracle/                 OmniOracle.sol, MockOmniOracleV2.sol,
+│   │                           MPCGateway.sol
+│   ├── revenue/                RevenueShare.sol
 │   ├── registry/               PromptRegistry.sol
 │   ├── audit/                  AuditTrail.sol
-│   └── test/mocks/             MockWETH, MockAavePool, MockAToken
+│   └── test/
+│       ├── mocks/              MockWETH, MockAavePool, OmniOracleHarness
+│       └── *.test.js
 │
-├── ai-service/
-│   └── src/
-│       ├── agents/             codeAnalysisAgent.js
-│       │                       riskAssessmentAgent.js
-│       │                       businessAnalysisAgent.js  ← 0G Compute
-│       │                       debateOrchestrator.js     ← 3-round debate
-│       │                       reportGenerator.js
-│       ├── services/           onChainListener.js        ← event-driven
-│       │                       monitoringAgent.js        ← 6 h cycle
-│       │                       deadManPinger.js          ← 24 h heartbeat
-│       │                       auditStorage.js
-│       ├── utils/              zgStorage.js              ← 0G Storage SDK
-│       │                       zgComputeClient.js        ← 0G Compute
-│       │                       llmClient.js
-│       │                       parseJson.js
-│       └── routes/             audit.js
+├── stylus/                     Rust/Wasm ScoringEngine (Arbitrum Stylus)
+│   └── src/lib.rs              computeScore(r, q, m) → finalScore
+│
+├── chainlink/
+│   ├── audit-source.js         DON script: calls 0G Compute → 160-byte result
+│   └── test-audit-source.js   Local simulation with mock DON environment
 │
 ├── frontend/
 │   ├── pages/                  index.tsx (main UI)
 │   ├── components/             LPDashboard.tsx
-│   │                           ProjectsSection.tsx       ← veto + claim UI
-│   │                           AuditStatusView.tsx       ← AI panel
-│   │                           ApplyModal.tsx
+│   │                           ProjectsSection.tsx  ← audit drawer
+│   │                           AuditStatusView.tsx  ← 3D score panel
+│   │                           ApplyModal.tsx       ← A2A identity fields
 │   │                           DepositModal.tsx
 │   │                           WithdrawModal.tsx
 │   ├── hooks/
@@ -434,15 +457,14 @@ OmniVault/
 │   │   ├── useVaultStats.ts
 │   │   ├── useVaultTransactions.ts
 │   │   ├── useProjects.ts
-│   │   ├── useProjectSubmit.ts
-│   │   ├── useAuditStatus.ts
-│   │   ├── useVeto.ts
-│   │   └── useClaimPayout.ts   ← A4: vesting claim
+│   │   ├── useProjectSubmit.ts ← 7-arg A2A submit
+│   │   ├── useAuditStatus.ts   ← 3D score fields
+│   │   └── useProjects.ts
 │   └── styles/                 main.css
 │
 └── scripts/
-    ├── deploy.ts               deploy to 0G / Arbitrum
-    └── deploy-and-test.ts      local E2E test
+    ├── deploy-arb-sepolia.ts   Deploy to Arbitrum Sepolia
+    └── demo-agent.ts           Full A2A pipeline simulation
 ```
 
 ---
@@ -453,4 +475,4 @@ MIT — see [LICENSE](LICENSE)
 
 ---
 
-*Built for the [0G APAC Hackathon](https://0g.ai) · May 2026*
+*Built for the [Arbitrum Open House London Hackathon](https://arbitrum.io) · June 2026*

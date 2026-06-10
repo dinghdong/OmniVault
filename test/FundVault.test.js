@@ -4,90 +4,81 @@ const { ethers } = require("hardhat");
 
 const toStr = (x) => x.toString();
 
-describe("FundVault", function () {
-  let fv, ft, weth, aavePool, aWeth, owner, lp, project;
+// Helper: fund the vault with raw ETH (simulates returned investment proceeds)
+async function fundVault(vaultAddr, amountEth) {
+  await hre.network.provider.request({
+    method: "hardhat_setBalance",
+    params: [vaultAddr, "0x" + ethers.parseEther(amountEth).toString(16)],
+  });
+}
+
+describe("FundVault (AAVE-free ETH vault)", function () {
+  let fv, ft, owner, lp, lp2, investor;
 
   beforeEach(async function () {
     const signers = await hre.ethers.getSigners();
     owner = signers[0];
     lp = signers[1];
-    project = signers[2];
+    lp2 = signers[2];
+    investor = signers[3];
 
-    // 1. Mock WETH
-    const MockWETH = await hre.ethers.getContractFactory("MockWETH");
-    weth = await MockWETH.deploy();
-    await weth.waitForDeployment();
-
-    // 2. Mock AAVE Pool + aWETH
-    const MockAavePool = await hre.ethers.getContractFactory("MockAavePool");
-    aavePool = await MockAavePool.deploy();
-    await aavePool.waitForDeployment();
-
-    const MockAToken = await hre.ethers.getContractFactory("MockAToken");
-    aWeth = await MockAToken.deploy(await aavePool.getAddress(), await weth.getAddress());
-    await aWeth.waitForDeployment();
-
-    await aavePool.setAToken(await weth.getAddress(), await aWeth.getAddress());
-
-    // 3. FundToken
+    // 1. FundToken
     const FundTokenF = await hre.ethers.getContractFactory("FundToken");
     ft = await FundTokenF.deploy();
     await ft.waitForDeployment();
 
-    // 4. FundVault (ETH-only signature: weth, aavePool, aWeth, fundToken)
+    // 2. FundVault (simple ETH vault, no AAVE)
     const FundVaultF = await hre.ethers.getContractFactory("FundVault");
-    fv = await FundVaultF.deploy(
-      await weth.getAddress(),
-      await aavePool.getAddress(),
-      await aWeth.getAddress(),
-      await ft.getAddress()
-    );
+    fv = await FundVaultF.deploy(await ft.getAddress());
     await fv.waitForDeployment();
 
-    // 5. Roles
+    // 3. Roles
     await ft.grantRole(await ft.MINTER_ROLE(), await fv.getAddress());
     await ft.grantRole(await ft.BURNER_ROLE(), await fv.getAddress());
-    await fv.grantRole(await fv.INVESTOR_ROLE(), owner.address);
+    await fv.grantRole(await fv.INVESTOR_ROLE(), investor.address);
   });
 
+  // ─── Deposit ─────────────────────────────────────────────────────────────────
   describe("deposit", function () {
-    it("reverts on zero value", async function () {
+    it("reverts on zero ETH", async function () {
       await expect(
         fv.connect(lp).deposit({ value: 0 })
       ).to.be.revertedWithCustomError(fv, "ZeroAmount");
     });
 
-    it("accepts ETH and mints FundToken shares", async function () {
+    it("mints shares equal to ETH at accrualFactor=1e18", async function () {
       const amount = ethers.parseEther("1");
       await fv.connect(lp).deposit({ value: amount });
-      // At launch accrualFactor=1e18 → shares == amount
       expect(await ft.getShares(lp.address)).to.equal(amount);
       expect(await ft.balanceOf(lp.address)).to.equal(amount);
     });
 
-    it("supplies ETH to AAVE as aWETH", async function () {
-      const amount = ethers.parseEther("1");
+    it("ETH is held in the vault", async function () {
+      const amount = ethers.parseEther("2");
       await fv.connect(lp).deposit({ value: amount });
-      // Vault holds aWETH 1:1 from MockAavePool
-      expect(await aWeth.balanceOf(await fv.getAddress())).to.equal(amount);
+      expect(await fv.vaultBalance()).to.be.gte(amount);
+    });
+
+    it("emits Deposited event", async function () {
+      const amount = ethers.parseEther("0.5");
+      await expect(fv.connect(lp).deposit({ value: amount }))
+        .to.emit(fv, "Deposited")
+        .withArgs(lp.address, amount, amount); // shares == amount when factor=1
     });
   });
 
+  // ─── Redeem ──────────────────────────────────────────────────────────────────
   describe("redeem", function () {
     it("reverts on zero shares", async function () {
       await expect(fv.redeem(0)).to.be.revertedWithCustomError(fv, "ZeroAmount");
     });
 
-    it("burns shares and returns ETH", async function () {
+    it("burns shares and returns ETH to LP", async function () {
       const amount = ethers.parseEther("1");
       await fv.connect(lp).deposit({ value: amount });
 
-      // Fund the vault with raw ETH so unwrap+send succeeds
       const vaultAddr = await fv.getAddress();
-      await hre.network.provider.request({
-        method: "hardhat_setBalance",
-        params: [vaultAddr, "0x" + ethers.parseEther("5").toString(16)],
-      });
+      await fundVault(vaultAddr, "5"); // ensure vault has ETH
 
       const shares = await ft.getShares(lp.address);
       const ethBefore = await ethers.provider.getBalance(lp.address);
@@ -96,40 +87,121 @@ describe("FundVault", function () {
       const gasCost = receipt.gasUsed * receipt.gasPrice;
       const ethAfter = await ethers.provider.getBalance(lp.address);
 
-      // LP should net ~1 ETH back (modulo gas)
       const received = ethAfter - ethBefore + gasCost;
       expect(received).to.equal(amount);
       expect(await ft.getShares(lp.address)).to.equal(0n);
     });
+
+    it("reverts when vault lacks ETH", async function () {
+      const amount = ethers.parseEther("1");
+      await fv.connect(lp).deposit({ value: amount });
+
+      // Drain the vault
+      const vaultAddr = await fv.getAddress();
+      await hre.network.provider.request({
+        method: "hardhat_setBalance",
+        params: [vaultAddr, "0x0"],
+      });
+
+      const shares = await ft.getShares(lp.address);
+      await expect(fv.connect(lp).redeem(shares))
+        .to.be.revertedWithCustomError(fv, "InsufficientVaultBalance");
+    });
   });
 
-  describe("access control", function () {
+  // ─── Investment Operations ────────────────────────────────────────────────────
+  describe("divestForInvestment", function () {
     it("only INVESTOR_ROLE can divest", async function () {
-      const amount = ethers.parseEther("0.1");
-      await expect(fv.connect(lp).divestForInvestment(amount))
+      await expect(fv.connect(lp).divestForInvestment(ethers.parseEther("0.1")))
         .to.be.revertedWithCustomError(fv, "AccessControlUnauthorizedAccount");
     });
 
-    it("only INVESTOR_ROLE can addRealizedGains", async function () {
-      await expect(fv.connect(lp).addRealizedGains(ethers.parseEther("0.1"), ethers.parseEther("0.08")))
+    it("sends ETH to caller (INVESTOR_ROLE)", async function () {
+      const amount = ethers.parseEther("1");
+      await fv.connect(lp).deposit({ value: amount });
+
+      const before = await ethers.provider.getBalance(investor.address);
+      const tx = await fv.connect(investor).divestForInvestment(amount);
+      const receipt = await tx.wait();
+      const gasCost = receipt.gasUsed * receipt.gasPrice;
+      const after = await ethers.provider.getBalance(investor.address);
+
+      expect(after + gasCost - before).to.equal(amount);
+    });
+
+    it("reverts when vault lacks ETH", async function () {
+      await expect(fv.connect(investor).divestForInvestment(ethers.parseEther("1")))
+        .to.be.revertedWithCustomError(fv, "InsufficientVaultBalance");
+    });
+  });
+
+  // ─── Gain/Loss Accounting ─────────────────────────────────────────────────────
+  describe("addRealizedGains", function () {
+    it("only INVESTOR_ROLE can call", async function () {
+      await expect(fv.connect(lp).addRealizedGains(1n, 1n))
         .to.be.revertedWithCustomError(fv, "AccessControlUnauthorizedAccount");
     });
 
-    it("only INVESTOR_ROLE can addRealizedLoss", async function () {
+    it("increases accrualFactor, raising LP balances", async function () {
+      const amount = ethers.parseEther("1");
+      await fv.connect(lp).deposit({ value: amount });
+
+      const gain = ethers.parseEther("0.1"); // +10%
+      await fv.connect(investor).addRealizedGains(gain, amount, { value: gain });
+
+      const balance = await fv.balanceOf(lp.address);
+      expect(balance).to.be.gt(amount);
+      expect(balance).to.be.closeTo(ethers.parseEther("1.1"), ethers.parseEther("0.001"));
+    });
+  });
+
+  describe("addRealizedLoss", function () {
+    it("only INVESTOR_ROLE can call", async function () {
       await expect(fv.connect(lp).addRealizedLoss(0n, ethers.parseEther("0.1")))
         .to.be.revertedWithCustomError(fv, "AccessControlUnauthorizedAccount");
     });
+
+    it("decreases accrualFactor, reducing LP balances", async function () {
+      const amount = ethers.parseEther("1");
+      await fv.connect(lp).deposit({ value: amount });
+
+      const recovered = ethers.parseEther("0.9"); // lost 0.1
+      await fv.connect(investor).addRealizedLoss(recovered, amount);
+
+      const balance = await fv.balanceOf(lp.address);
+      expect(balance).to.be.lt(amount);
+      expect(balance).to.be.closeTo(ethers.parseEther("0.9"), ethers.parseEther("0.001"));
+    });
   });
 
-  describe("balanceOf", function () {
-    it("returns 0 for address with no balance", async function () {
-      expect(toStr(await fv.balanceOf(lp.address))).to.equal("0");
+  // ─── Access Control ───────────────────────────────────────────────────────────
+  describe("access control — all role-protected functions", function () {
+    it("only INVESTOR_ROLE can call addRealizedGains", async function () {
+      await expect(fv.connect(lp).addRealizedGains(1n, 1n))
+        .to.be.revertedWithCustomError(fv, "AccessControlUnauthorizedAccount");
+    });
+    it("only INVESTOR_ROLE can call addRealizedLoss", async function () {
+      await expect(fv.connect(lp).addRealizedLoss(0n, 1n))
+        .to.be.revertedWithCustomError(fv, "AccessControlUnauthorizedAccount");
+    });
+  });
+
+  // ─── balanceOf / vaultBalance ─────────────────────────────────────────────────
+  describe("view helpers", function () {
+    it("balanceOf returns 0 for new address", async function () {
+      expect(await fv.balanceOf(lp.address)).to.equal(0n);
     });
 
-    it("reflects deposit amount", async function () {
+    it("balanceOf reflects deposit", async function () {
       const amount = ethers.parseEther("0.5");
       await fv.connect(lp).deposit({ value: amount });
       expect(await fv.balanceOf(lp.address)).to.equal(amount);
+    });
+
+    it("vaultBalance reflects deposited ETH", async function () {
+      const amount = ethers.parseEther("1");
+      await fv.connect(lp).deposit({ value: amount });
+      expect(await fv.vaultBalance()).to.be.gte(amount);
     });
   });
 });

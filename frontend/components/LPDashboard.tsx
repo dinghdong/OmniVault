@@ -156,7 +156,7 @@ export default function LPDashboard() {
         <div className="lp-card">
           <div className="lp-card-label">Vault TVL</div>
           <div className="lp-card-value">{tvlEth >= 1000 ? `${(tvlEth/1000).toFixed(2)}K` : tvlEth.toFixed(4)} ETH</div>
-          <div className="lp-card-sub">via AAVE V3 (0G mock)</div>
+          <div className="lp-card-sub">ETH-only vault · no AAVE</div>
         </div>
 
         {/* Portfolio at work */}
@@ -183,7 +183,7 @@ export default function LPDashboard() {
           <RebaseSparkline accrualFactor={accrualFactor} />
           <div className="lp-rebase-meta">
             accrualFactor = {(Number(accrualFactor) / 1e18).toFixed(8)}
-            <span className="lp-rebase-note"> · grows as AAVE yields flow into vault</span>
+            <span className="lp-rebase-note"> · grows as AI investments return gains to vault</span>
           </div>
         </div>
       )}

@@ -9,6 +9,73 @@ import { useVeto } from '../hooks/useVeto';
 import { useClaimPayout } from '../hooks/useClaimPayout';
 import { explorerUrl } from '../hooks/contracts';
 
+// ─── NFA pixel avatar (deterministic, same as agent-sim) ─────────────────────
+
+const AGENT_COLORS = ['#00ff88', '#63b3ed', '#a78bfa', '#f97316', '#f2cc60', '#f472b6'];
+
+function didColor(did: string): string {
+  let h = 0;
+  for (let i = 0; i < did.length; i++) h = (h * 31 + did.charCodeAt(i)) >>> 0;
+  return AGENT_COLORS[h % AGENT_COLORS.length];
+}
+
+function agentIdFromDid(did: string): number {
+  const m = did.match(/:(\d+)$/);
+  return m ? parseInt(m[1], 10) : 1;
+}
+
+function AgentAvatar({ id, color, size = 20 }: { id: number; color: string; size?: number }) {
+  const grid = Array.from({ length: 3 }, (_, r) =>
+    Array.from({ length: 3 }, (_, c) =>
+      c === 2
+        ? ((id * 137 + r * 31) % 7 < 4)
+        : ((id * 137 + (r * 3 + c) * 31) % 7 < 4)
+    )
+  );
+  return (
+    <div style={{
+      width: size, height: size,
+      borderRadius: Math.round(size * 0.22),
+      overflow: 'hidden',
+      background: '#010409',
+      border: `1px solid ${color}40`,
+      flexShrink: 0,
+    }}>
+      <svg viewBox="0 0 3 3" width={size} height={size}>
+        {grid.map((row, r) =>
+          row.map((on, c) =>
+            on ? <rect key={`${r}-${c}`} x={c} y={r} width={1} height={1} fill={color} opacity={0.85} /> : null
+          )
+        )}
+      </svg>
+    </div>
+  );
+}
+
+function AgentBadge({ did }: { did: string }) {
+  if (!did || !did.startsWith('did:')) return null;
+  const color   = didColor(did);
+  const agentId = agentIdFromDid(did);
+  const abbrev  = did.length > 28 ? `${did.slice(0, 16)}…${did.slice(-6)}` : did;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 5,
+      padding: '3px 8px 3px 4px',
+      background: `${color}0d`,
+      border: `1px solid ${color}25`,
+      borderRadius: 6,
+      marginLeft: 'auto',
+    }}>
+      <AgentAvatar id={agentId} color={color} size={16} />
+      <span style={{
+        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+        fontSize: 9, color, opacity: 0.8, letterSpacing: '0.02em',
+        maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>{abbrev}</span>
+    </div>
+  );
+}
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function shortAddr(addr: string) {
@@ -101,9 +168,10 @@ function ProjectCard({ project, onViewAudit }: ProjectCardProps) {
       <div className="project-card-header">
         <div className="project-id">#{project.projectId}</div>
         <StatusBadge label={project.statusLabel} />
-        {project.auditedAt > 0 && auditScore > 0 && (
+        {project.auditedAt > 0n && auditScore > 0 && (
           <span className="proj-score">Score: {auditScore}%</span>
         )}
+        {project.agentDid && <AgentBadge did={project.agentDid} />}
       </div>
 
       <div className="project-meta">
@@ -128,6 +196,15 @@ function ProjectCard({ project, onViewAudit }: ProjectCardProps) {
           <div className="project-meta-row">
             <span className="meta-label">Investment</span>
             <span className="meta-value">{fmtEth(project.investmentAmount)} ETH</span>
+          </div>
+        )}
+        {/* 3D score breakdown if audited */}
+        {project.auditedAt > 0n && project.reliabilityScore > 0 && (
+          <div className="project-meta-row">
+            <span className="meta-label">3D Scores</span>
+            <span className="meta-value" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
+              R:{project.reliabilityScore} Q:{project.qualityScore} M:{project.marketFitScore}
+            </span>
           </div>
         )}
       </div>

@@ -13,7 +13,13 @@ import {ConfirmedOwner} from "@chainlink/contracts/src/v0.8/shared/access/Confir
 ///   • JS source stored on-chain (updatable by owner), executed by Chainlink DON.
 ///   • DON uses DON-hosted Secrets for the 0G Compute API key — never exposed on-chain.
 ///   • 0G Compute runs inference inside a TeeML enclave (Intel TDX) on Mainnet.
-///   • Result: (finalScore uint256, contentHash bytes32) encoded as 64 bytes.
+///   • Result (160 bytes, ABI-encoded):
+///       word 0 (0–31):   finalScore   uint256   composite score [0,100]
+///       word 1 (32–63):  reliability  uint256   [0,100]
+///       word 2 (64–95):  quality      uint256   [0,100]
+///       word 3 (96–127): marketFit    uint256   [0,100]
+///       word 4 (128–159): contentHash bytes32   SHA-256 of full audit log
+///   • Older 64-byte responses (finalScore + contentHash) are still decoded gracefully.
 contract OmniOracle is FunctionsClient, ConfirmedOwner {
     using FunctionsRequest for FunctionsRequest.Request;
 
@@ -23,6 +29,14 @@ contract OmniOracle is FunctionsClient, ConfirmedOwner {
     error RequestNotFound(bytes32 requestId);
     error AuditAlreadyPending(uint256 projectId);
     error NotAuthorized();
+
+    // ─── Structs ───────────────────────────────────────────────────────────────
+    /// @notice 3-dimensional AI audit breakdown stored per project.
+    struct AuditScores {
+        uint8 reliability;   // agent reliability score [0,100]
+        uint8 quality;       // code/product quality    [0,100]
+        uint8 marketFit;     // market fit / traction   [0,100]
+    }
 
     // ─── Events ────────────────────────────────────────────────────────────────
     event AuditRequested(
@@ -34,6 +48,9 @@ contract OmniOracle is FunctionsClient, ConfirmedOwner {
         uint256 indexed projectId,
         bytes32 indexed requestId,
         uint256 score,
+        uint8   reliability,
+        uint8   quality,
+        uint8   marketFit,
         bytes32 contentHash
     );
     event AuditReport(
@@ -75,6 +92,9 @@ contract OmniOracle is FunctionsClient, ConfirmedOwner {
 
     /// Maps projectId → content hash (SHA-256 of full audit log)
     mapping(uint256 => bytes32) public fulfilledHash;
+
+    /// Maps projectId → 3-dimensional audit breakdown (reliability/quality/marketFit)
+    mapping(uint256 => AuditScores) private s_auditScores;
 
     // ─── Constructor ────────────────────────────────────────────────────────────
     /// @param functionsRouter Chainlink Functions Router address (Sepolia: 0xb83E47C2bC239B3bf370bc41e1459A34b41238D0)
@@ -129,6 +149,18 @@ contract OmniOracle is FunctionsClient, ConfirmedOwner {
         return s_donId;
     }
 
+    /// @notice Returns the 3-dimensional audit breakdown for a fulfilled project.
+    ///         All values are 0 if the audit hasn't been fulfilled yet, or if
+    ///         the response used the legacy 64-byte format.
+    function fulfilledScores(uint256 projectId)
+        external
+        view
+        returns (uint8 reliability, uint8 quality, uint8 marketFit)
+    {
+        AuditScores storage s = s_auditScores[projectId];
+        return (s.reliability, s.quality, s.marketFit);
+    }
+
     // ─── Request Audit ──────────────────────────────────────────────────────────
 
     /// @notice Request an AI audit for a project via Chainlink Functions.
@@ -179,12 +211,21 @@ contract OmniOracle is FunctionsClient, ConfirmedOwner {
     // ─── Chainlink Callback ─────────────────────────────────────────────────────
 
     /// @notice Called by Chainlink DON after JS execution completes.
-    ///         Stores score+contentHash in mappings; NO external call to InvestmentManager.
+    ///         Stores score + 3D breakdown + contentHash; NO external call to InvestmentManager.
     ///         InvestmentManager.settleAudit(projectId) is called separately (permissionless).
     ///
-    ///         Gas budget (90 000):
-    ///           ~69 000 used here (2 cold SSTOREs + events + summary loop)
-    ///           ~21 000 remaining — no 63/64 sub-call risk.
+    ///         Expected response format (160 bytes, ABI-encoded uint256×4 + bytes32):
+    ///           word 0 ( 0– 31): finalScore   uint256  [0,100]
+    ///           word 1 (32– 63): reliability  uint256  [0,100]
+    ///           word 2 (64– 95): quality      uint256  [0,100]
+    ///           word 3 (96–127): marketFit    uint256  [0,100]
+    ///           word 4 (128–159): contentHash bytes32
+    ///
+    ///         Older 64-byte responses (finalScore + contentHash) are decoded gracefully;
+    ///         3D scores default to 0 in that case.
+    ///
+    ///         Gas budget (300 000 callback):
+    ///           ~90 000 used here (3 cold SSTOREs: score, auditScores struct, hash + events)
     function _fulfillRequest(
         bytes32 requestId,
         bytes   memory response,
@@ -203,21 +244,46 @@ contract OmniOracle is FunctionsClient, ConfirmedOwner {
         }
 
         // ── Success path ─────────────────────────────────────────────────────
-        // Read score from first 32 bytes via assembly (no ABI overhead, no bounds check cost)
+        // Read finalScore from word 0
         uint256 score;
         assembly { score := mload(add(response, 32)) }
         if (score > 100) score = 100;
 
         fulfilledScore[projectId] = score + 1; // +1: score=0 ≠ unfulfilled=0
 
-        // Store content hash if response is long enough (bytes 32-63)
-        if (response.length >= 64) {
-            bytes32 contentHash;
-            assembly { contentHash := mload(add(response, 64)) }
-            fulfilledHash[projectId] = contentHash;
-            emit AuditFulfilled(projectId, requestId, score, contentHash);
+        // Read 3D breakdown from words 1-3 (if response is >= 128 bytes)
+        uint8 reliability;
+        uint8 quality;
+        uint8 marketFit;
+        if (response.length >= 128) {
+            uint256 r; uint256 q; uint256 m;
+            assembly {
+                r := mload(add(response, 64))
+                q := mload(add(response, 96))
+                m := mload(add(response, 128))
+            }
+            if (r > 100) r = 100;
+            if (q > 100) q = 100;
+            if (m > 100) m = 100;
+            reliability = uint8(r);
+            quality     = uint8(q);
+            marketFit   = uint8(m);
+            s_auditScores[projectId] = AuditScores(reliability, quality, marketFit);
         }
-        // No byte-copy loop, no AuditReport event — keeps callback under 60K gas
+
+        // Read contentHash from word 4 (bytes 128-159) or fallback to old word 1 (bytes 32-63)
+        bytes32 contentHash;
+        if (response.length >= 160) {
+            assembly { contentHash := mload(add(response, 160)) }
+        } else if (response.length >= 64) {
+            // Backward-compatible: old 64-byte format (finalScore + contentHash)
+            assembly { contentHash := mload(add(response, 64)) }
+        }
+        if (contentHash != bytes32(0)) {
+            fulfilledHash[projectId] = contentHash;
+        }
+
+        emit AuditFulfilled(projectId, requestId, score, reliability, quality, marketFit, contentHash);
     }
 
     // ─── Helpers ────────────────────────────────────────────────────────────────

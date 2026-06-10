@@ -1,0 +1,37 @@
+[package]
+name          = "scoring-engine"
+version       = "0.1.0"
+edition       = "2021"
+description   = "OmniVault AI-audit weighted scoring engine (Arbitrum Stylus)"
+license       = "MIT"
+
+[[bin]]
+name    = "scoring-engine"
+path    = "src/main.rs"
+
+[lib]
+crate-type = ["lib", "cdylib"]   # lib → unit tests; cdylib → Wasm bytecode
+
+[dependencies]
+# NO features here — export-abi and mini-alloc are activated via our crate features below
+stylus-sdk       = { version = "0.9.2" }
+alloy-primitives = { version = "0.8", default-features = false }
+alloy-sol-types  = { version = "0.8", default-features = false }
+
+[dev-dependencies]
+# export-abi stubs satisfy the linker for native test builds.
+# Our unit tests only exercise pure-math functions; the stubs are never invoked.
+# This feature is ONLY active during `cargo test`, not `cargo build --target wasm32`.
+stylus-sdk = { version = "0.9.2", features = ["export-abi"] }
+
+[profile.release]
+codegen-units = 1
+strip         = true
+lto           = true
+panic         = "abort"   # required for Wasm / Stylus
+opt-level     = 3
+
+[features]
+default    = ["mini-alloc"]
+export-abi = ["stylus-sdk/export-abi"]
+mini-alloc = ["stylus-sdk/mini-alloc"]

@@ -80,10 +80,13 @@ export function useProjectSubmit() {
   }, [writeError]);
 
   const submit = useCallback((
-    commitHash:      `0x${string}`,
-    contractAddr:    string,
-    bizApi:          string,
-    requestedAmount: bigint,
+    commitHash:       `0x${string}`,
+    contractAddr:     string,
+    bizApi:           string,
+    requestedAmount:  bigint,
+    agentDid:         string,
+    agentRepo:        string,
+    agentApiEndpoint: string,
   ) => {
     setState(idle);
     writeContract({
@@ -91,7 +94,15 @@ export function useProjectSubmit() {
       abi:          investmentManagerAbi,
       functionName: 'submitProject',
       chainId:      contractChainId,
-      args:         [commitHash, contractAddr as `0x${string}`, bizApi, requestedAmount],
+      args:         [
+        commitHash,
+        contractAddr as `0x${string}`,
+        bizApi,
+        requestedAmount,
+        agentDid,
+        agentRepo,
+        agentApiEndpoint,
+      ],
     } as any);
   }, [writeContract]);
 
