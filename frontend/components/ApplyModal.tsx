@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useCallback } from 'react';
-import { useAccount, useChainId } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { keccak256, parseEther } from 'viem';
 import { useProjectSubmit } from '../hooks/useProjectSubmit';
 import { contractChainId } from '../hooks/contracts';
@@ -68,8 +68,9 @@ function UploadZone({
 type Step = 'idle' | 'hashing' | 'uploading-0g' | 'submitting';
 
 export default function ApplyModal() {
-  const { address } = useAccount();
-  const chainId     = useChainId();
+  // Wallet's real chain — useChainId() falls back to the config default and
+  // hides the mismatch when the wallet sits on an unconfigured chain.
+  const { address, chainId } = useAccount();
   const { submit, state, reset } = useProjectSubmit();
 
   const [file, setFile]                     = useState<File | null>(null);
@@ -111,7 +112,7 @@ export default function ApplyModal() {
   const handleSubmit = async () => {
     setLocalError(null);
     if (!address)                              { setLocalError('Connect your wallet first.'); return; }
-    if (isWrongChain)                          { setLocalError(`Switch to Ethereum Sepolia (chainId ${contractChainId}).`); return; }
+    if (isWrongChain)                          { setLocalError(`Switch to Arbitrum Sepolia (chainId ${contractChainId}).`); return; }
     if (!file)                                 { setLocalError('Upload your pitch deck.'); return; }
     if (!requestedEth || reqEthNum <= 0)       { setLocalError('Enter a valid funding request in ETH.'); return; }
     if (busy) return;
@@ -234,7 +235,7 @@ export default function ApplyModal() {
 
       {isWrongChain && (
         <div className="apply-warning">
-          ⚠ Switch MetaMask to <strong>Ethereum Sepolia</strong> (chainId {contractChainId}) before submitting.
+          ⚠ Switch MetaMask to <strong>Arbitrum Sepolia</strong> (chainId {contractChainId}) before submitting.
         </div>
       )}
 

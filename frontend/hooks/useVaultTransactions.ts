@@ -1,6 +1,6 @@
 'use client';
 import { useCallback } from 'react';
-import { useWriteContract, useWaitForTransactionReceipt, useAccount, useBalance, useChainId, useSwitchChain } from 'wagmi';
+import { useWriteContract, useWaitForTransactionReceipt, useAccount, useBalance, useSwitchChain } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import { fundVaultAddress, fundVaultAbi, contractChainId } from './contracts';
 
@@ -14,12 +14,14 @@ export interface TransactionState {
 }
 
 export function useVaultTransactions() {
-  const { address } = useAccount();
+  // useAccount().chainId is the wallet's REAL chain (even when it's a chain
+  // missing from the wagmi config) — useChainId() only reflects the config's
+  // active chain and falls back to the default chain, masking mismatches.
+  const { address, chainId: walletChainId } = useAccount();
   const { data: ethBalance } = useBalance({ address });
-  const chainId = useChainId();
   const { switchChain } = useSwitchChain();
 
-  const isWrongChain = !!address && chainId !== contractChainId;
+  const isWrongChain = !!address && walletChainId !== contractChainId;
 
   // ── Separate hooks for deposit and withdraw ──────────────────────────────
   const {
