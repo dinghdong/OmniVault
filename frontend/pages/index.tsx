@@ -50,11 +50,7 @@ export default function Home() {
       <nav className="nav">
         <div className="nav-content">
           <div className="logo">
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-              <rect width="32" height="32" rx="8" fill="#00ff88" />
-              <path d="M8 16L16 8L24 16L16 24L8 16Z" stroke="#08090d" strokeWidth="2" fill="none" />
-              <circle cx="16" cy="16" r="4" fill="#08090d" />
-            </svg>
+            <img src="/logo.png" alt="OmniVault" width={32} height={32} style={{ borderRadius: 8 }} />
             <span>OmniVault</span>
           </div>
           <div className="nav-links">
@@ -255,11 +251,7 @@ export default function Home() {
         <div className="footer-content">
           <div className="footer-brand">
             <div className="logo">
-              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                <rect width="32" height="32" rx="8" fill="#00ff88" />
-                <path d="M8 16L16 8L24 16L16 24L8 16Z" stroke="#08090d" strokeWidth="2" fill="none" />
-                <circle cx="16" cy="16" r="4" fill="#08090d" />
-              </svg>
+              <img src="/logo.png" alt="OmniVault" width={32} height={32} style={{ borderRadius: 8 }} />
               <span>OmniVault</span>
             </div>
             <p>Autonomous A2A Investment Protocol · Arbitrum</p>
