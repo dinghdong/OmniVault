@@ -1,6 +1,7 @@
 'use client';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, useBalance, useSwitchChain } from 'wagmi';
+import { useQueryClient } from '@tanstack/react-query';
 import { formatUnits, parseUnits } from 'viem';
 import { fundVaultAddress, fundVaultAbi, contractChainId } from './contracts';
 
@@ -14,13 +15,19 @@ export interface TransactionState {
 }
 
 export function useVaultTransactions() {
+  const queryClient = useQueryClient();
+
   // useAccount().chainId is the wallet's REAL chain (even when it's a chain
   // missing from the wagmi config) — useChainId() only reflects the config's
   // active chain and falls back to the default chain, masking mismatches.
   const { address, chainId: walletChainId } = useAccount();
   // Pin the balance read to the contracts' chain so a multi-chain wallet always
   // shows spendable Arbitrum Sepolia ETH (not whatever chain it's parked on).
-  const { data: ethBalance } = useBalance({ address, chainId: contractChainId });
+  const { data: ethBalance } = useBalance({
+    address,
+    chainId: contractChainId,
+    query: { refetchInterval: 3000 },
+  });
   const { switchChain } = useSwitchChain();
 
   const isWrongChain = !!address && walletChainId !== contractChainId;
@@ -48,6 +55,14 @@ export function useVaultTransactions() {
 
   const { isLoading: isWithdrawConfirming, isSuccess: isWithdrawConfirmed } =
     useWaitForTransactionReceipt({ hash: withdrawTxHash });
+
+  // Refetch all active chain reads once a deposit or withdraw is confirmed so
+  // the UI updates balances, shares, and vault stats immediately.
+  useEffect(() => {
+    if (isDepositConfirmed || isWithdrawConfirmed) {
+      queryClient.refetchQueries({ type: 'active' });
+    }
+  }, [isDepositConfirmed, isWithdrawConfirmed, queryClient]);
 
   // ── deposit ──────────────────────────────────────────────────────────────
   const deposit = useCallback(

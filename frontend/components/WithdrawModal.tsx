@@ -28,7 +28,7 @@ export default function WithdrawModal() {
     functionName: 'getShares',
     args: [address as `0x${string}`],
     chainId: contractChainId,
-    query: { enabled: !!address },
+    query: { enabled: !!address, refetchInterval: 3000 },
   });
 
   const { data: ftBalance } = useReadContract({
@@ -37,7 +37,7 @@ export default function WithdrawModal() {
     functionName: 'balanceOf',
     args: [address as `0x${string}`],
     chainId: contractChainId,
-    query: { enabled: !!address },
+    query: { enabled: !!address, refetchInterval: 3000 },
   });
 
   const userShares  = rawShares  ? formatUnits(rawShares  as bigint, 18) : '0';

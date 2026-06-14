@@ -33,7 +33,7 @@ export function useVaultStats(): VaultStats {
     abi: fundTokenAbi,
     functionName: 'accrualFactor',
     chainId: contractChainId,
-    query: { enabled: isConfigured },
+    query: { enabled: isConfigured, refetchInterval: 3000 },
   });
 
   const { data: totalSupply, isLoading: l2 } = useReadContract({
@@ -41,7 +41,7 @@ export function useVaultStats(): VaultStats {
     abi: fundTokenAbi,
     functionName: 'totalSupply',
     chainId: contractChainId,
-    query: { enabled: isConfigured },
+    query: { enabled: isConfigured, refetchInterval: 3000 },
   });
 
   const hasManager =
@@ -54,7 +54,7 @@ export function useVaultStats(): VaultStats {
     abi: investmentManagerAbi,
     functionName: 'projectCount',
     chainId: contractChainId,
-    query: { enabled: hasManager },
+    query: { enabled: hasManager, refetchInterval: 3000 },
   });
 
   const { data: rawScoreThreshold, isLoading: l4 } = useReadContract({
@@ -62,7 +62,7 @@ export function useVaultStats(): VaultStats {
     abi: investmentManagerAbi,
     functionName: 'scoreThreshold',
     chainId: contractChainId,
-    query: { enabled: hasManager },
+    query: { enabled: hasManager, refetchInterval: 3000 },
   });
 
   const isLoading = l1 || l2 || l3 || l4;

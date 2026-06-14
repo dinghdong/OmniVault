@@ -31,7 +31,7 @@ export default function Home() {
     functionName: 'balanceOf',
     args: [address as `0x${string}`],
     chainId: contractChainId,
-    query: { enabled: !!address },
+    query: { enabled: !!address, refetchInterval: 3000 },
   });
   const userFtBalance = rawFtBalance
     ? parseFloat(formatUnits(rawFtBalance as bigint, 18)).toFixed(4)
