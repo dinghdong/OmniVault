@@ -17,10 +17,9 @@ export default function AuditPage() {
         <title>AI Audit — Project #{projectId} · OmniVault</title>
       </Head>
 
-      <div className="audit-page">
-        {/* ── Top nav ── */}
-        <header className="audit-page-header">
-          <Link href="/#pipeline" className="audit-back-btn">
+      <div className="detail-page">
+        <header className="detail-page-header">
+          <Link href="/#pipeline" className="detail-page-back">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5"
                 strokeLinecap="round" strokeLinejoin="round"/>
@@ -28,14 +27,13 @@ export default function AuditPage() {
             Back to Pipeline
           </Link>
 
-          <div className="audit-page-title">
-            <span className="audit-page-title-label">AI Audit Report</span>
-            {projectId && <span className="audit-page-title-id">Project #{projectId}</span>}
+          <div className="detail-page-title">
+            <span className="detail-page-title-label">AI Audit Report</span>
+            {projectId && <span className="detail-page-title-id">Project #{projectId}</span>}
           </div>
         </header>
 
-        {/* ── Content ── */}
-        <main className="audit-page-main">
+        <main className="detail-page-main">
           {!projectId ? (
             <div className="audit-page-empty">Invalid project ID</div>
           ) : (

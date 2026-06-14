@@ -233,8 +233,8 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
       </div>
 
       {/* ── Chainlink Functions / 0G Compute status ── */}
-      <div className="asv-section">
-        <div className="asv-section-title">
+      <div className="detail-card detail-card-padded">
+        <div className="detail-section-label">
           AI Audit — Chainlink × 0G Compute
           {status.chainlinkPending && <span className="asv-running-pill">Running…</span>}
           {hasScore && <span className="asv-done-pill">Done</span>}
@@ -366,8 +366,8 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
 
       {/* ── Settle Audit (two-transaction pattern) ── */}
       {status.needsSettlement && !settleSuccess && (
-        <div className="asv-section asv-settle-banner">
-          <div className="asv-section-title" style={{ color: '#facc15' }}>
+        <div className="detail-card detail-card-padded detail-card--accent-yellow">
+          <div className="detail-section-label">
             ⚡ Chainlink callback complete — finalization needed
           </div>
           <div className="asv-ai-hint" style={{ marginBottom: 12 }}>
@@ -375,7 +375,7 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
             Click below to finalize the project status (one transaction, anyone can call).
           </div>
           <button
-            className="asv-settle-btn"
+            className="btn-primary"
             onClick={handleSettle}
             disabled={settling || settleConfirming}
           >
@@ -391,8 +391,8 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
 
       {/* ── Execute Investment (timelock expired, PendingExecution) ── */}
       {timelockExpired && !executeSuccess && (
-        <div className="asv-section asv-settle-banner" style={{ borderColor: 'rgba(0,255,136,0.3)', background: 'rgba(0,255,136,0.05)' }}>
-          <div className="asv-section-title" style={{ color: '#00ff88' }}>
+        <div className="detail-card detail-card-padded detail-card--accent-green">
+          <div className="detail-section-label">
             ✓ Timelock expired — ready to execute
           </div>
           <div className="asv-ai-hint" style={{ marginBottom: 12 }}>
@@ -400,10 +400,9 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
             {reqEth ? <strong>{reqEth} ETH</strong> : 'funds'} to the project (20% upfront, 80% vested over 52 weeks).
           </div>
           <button
-            className="asv-settle-btn"
+            className="btn-primary"
             onClick={handleExecute}
             disabled={executing || executeConfirming}
-            style={{ borderColor: '#00ff88', color: '#00ff88' }}
           >
             {executing ? 'Confirm in wallet…' : executeConfirming ? 'Executing…' : '⚡ Execute Investment'}
           </button>
@@ -422,8 +421,8 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
 
       {/* ── Audit content hash (on-chain verifiable) ── */}
       {contentHashSet && (
-        <div className="asv-section">
-          <div className="asv-section-title">Audit Fingerprint</div>
+        <div className="detail-card detail-card-padded">
+          <div className="detail-section-label">Audit Fingerprint</div>
           <div className="asv-zg-row">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path d="M7 1L1 4v3c0 3.31 2.67 6.41 6 7 3.33-.59 6-3.69 6-7V4L7 1z" stroke="#00ff88" strokeWidth="1.2"/>
@@ -440,8 +439,8 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
 
       {/* ── Funding info ── */}
       {(reqEth || investedEth) && (
-        <div className="asv-section">
-          <div className="asv-section-title">Funding</div>
+        <div className="detail-card detail-card-padded">
+          <div className="detail-section-label">Funding</div>
           <div className="asv-funding-grid">
             {reqEth && (
               <div className="asv-funding-cell">
@@ -473,8 +472,8 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
 
       {/* ── Execution timelock ── */}
       {(timelockActive || timelockExpired) && (
-        <div className="asv-section asv-timelock">
-          <div className="asv-section-title" style={{ color: '#a78bfa' }}>
+        <div className="detail-card detail-card-padded detail-card--accent-purple">
+          <div className="detail-section-label">
             🔒 Execution Timelock
           </div>
           {timelockActive ? (
@@ -494,8 +493,8 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
 
       {/* ── LP Veto panel (during timelock) ── */}
       {timelockActive && !vetoSuccess && (
-        <div className="asv-section" style={{ borderColor: 'rgba(248,113,113,0.25)', background: 'rgba(248,113,113,0.04)' }}>
-          <div className="asv-section-title" style={{ color: '#f87171' }}>🗳 LP Veto Window</div>
+        <div className="detail-card detail-card-padded detail-card--accent-red">
+          <div className="detail-section-label">🗳 LP Veto Window</div>
           {isLP ? (
             <>
               <div className="asv-ai-hint" style={{ marginBottom: 12 }}>
@@ -503,10 +502,9 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
                 Any LP may call veto — one veto is sufficient.
               </div>
               <button
-                className="asv-settle-btn"
+                className="btn-danger"
                 onClick={handleVeto}
                 disabled={vetoing || vetoConfirming}
-                style={{ borderColor: '#f87171', color: '#f87171' }}
               >
                 {vetoing ? 'Confirm in wallet…' : vetoConfirming ? 'Submitting…' : '🗳 Veto Investment'}
               </button>
@@ -560,8 +558,8 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
 
       {/* ── Active: Vesting & Claim ── */}
       {status.statusNum === 5 && vestingData && (
-        <div className="asv-section" style={{ borderColor: 'rgba(0,255,136,0.2)' }}>
-          <div className="asv-section-title" style={{ color: '#00ff88' }}>⚡ Vesting Schedule</div>
+        <div className="detail-card detail-card-padded detail-card--accent-green">
+          <div className="detail-section-label">⚡ Vesting Schedule</div>
           <div className="asv-round-scores" style={{ marginBottom: 12 }}>
             <div className="asv-round-item">
               <span className="asv-round-label">Vested</span>
@@ -591,10 +589,10 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
           </div>
           {claimableWei > BigInt(0) && !(adminSuccess && adminAction === 'claim') && (
             <button
-              className="asv-settle-btn"
+              className="btn-primary"
               onClick={handleClaim}
               disabled={adminPending || adminConfirming}
-              style={{ marginTop: 12, borderColor: '#00ff88', color: '#00ff88' }}
+              style={{ marginTop: 12 }}
             >
               {adminPending && adminAction === 'claim' ? 'Confirm in wallet…'
                 : adminConfirming && adminAction === 'claim' ? 'Claiming…'
@@ -612,28 +610,23 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
 
       {/* ── Admin: simulateExit / circuitBreak / writeOff ── */}
       {(status.statusNum === 5 || status.statusNum === 6) && (
-        <div className="asv-section" style={{ borderColor: 'rgba(249,115,22,0.2)', background: 'rgba(249,115,22,0.03)' }}>
-          <div className="asv-section-title" style={{ color: '#f97316' }}>⚙ Admin Controls</div>
+        <div className="detail-card detail-card-padded detail-card--accent-orange">
+          <div className="detail-section-label">⚙ Admin Controls</div>
           <div className="asv-ai-hint" style={{ marginBottom: 10 }}>
             Requires RISK_AGENT_ROLE / DEFAULT_ADMIN_ROLE — will revert if not authorized.
           </div>
 
           {status.statusNum === 5 && (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <label style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, whiteSpace: 'nowrap' }}>Return %</label>
+              <div className="input-group" style={{ marginBottom: 8 }}>
+                <label className="input-label">Return %</label>
                 <input
                   type="number"
+                  className="input-field"
                   value={exitReturnPct}
                   onChange={e => setExitReturnPct(Number(e.target.value))}
                   min={0}
                   max={10000}
-                  style={{
-                    width: 70, padding: '3px 6px',
-                    background: 'rgba(255,255,255,0.07)',
-                    border: '1px solid rgba(249,115,22,0.3)',
-                    borderRadius: 4, color: '#fff', fontSize: 12,
-                  }}
                 />
                 <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>
                   100=1x · {exitReturnPct}% = {exitReturnPct >= 100 ? '+' : ''}{(exitReturnPct - 100).toFixed(0)}% ROI
@@ -641,18 +634,16 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button
-                  className="asv-settle-btn"
+                  className="btn-primary btn-sm"
                   onClick={handleSimulateExit}
                   disabled={adminPending || adminConfirming}
-                  style={{ borderColor: '#f97316', color: '#f97316', fontSize: 12, padding: '6px 12px' }}
                 >
                   {adminPending && adminAction === 'exit' ? 'Confirm…' : '→ Simulate Exit'}
                 </button>
                 <button
-                  className="asv-settle-btn"
+                  className="btn-danger btn-sm"
                   onClick={handleCircuitBreak}
                   disabled={adminPending || adminConfirming}
-                  style={{ borderColor: '#f87171', color: '#f87171', fontSize: 12, padding: '6px 12px' }}
                 >
                   {adminPending && adminAction === 'break' ? 'Confirm…' : '⚠ Circuit Break'}
                 </button>
@@ -662,10 +653,9 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
 
           {status.statusNum === 6 && (
             <button
-              className="asv-settle-btn"
+              className="btn-danger btn-sm"
               onClick={handleWriteOff}
               disabled={adminPending || adminConfirming}
-              style={{ borderColor: '#f87171', color: '#f87171', fontSize: 12, padding: '6px 12px' }}
             >
               {adminPending && adminAction === 'writeoff' ? 'Confirm…' : '✕ Mark Write-Off'}
             </button>
@@ -682,8 +672,8 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
 
       {/* ── Exited: P&L summary ── */}
       {status.statusNum === 7 && status.exitProceeds > BigInt(0) && (
-        <div className="asv-section" style={{ borderColor: 'rgba(139,148,158,0.25)' }}>
-          <div className="asv-section-title" style={{ color: '#8b949e' }}>→ Exit Summary</div>
+        <div className="detail-card detail-card-padded">
+          <div className="detail-section-label">→ Exit Summary</div>
           <div className="asv-funding-grid">
             <div className="asv-funding-cell">
               <span className="asv-funding-label">Invested</span>

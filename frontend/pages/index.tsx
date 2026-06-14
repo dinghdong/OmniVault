@@ -53,10 +53,10 @@ export default function Home() {
             <span>OmniVault</span>
           </div>
           <div className="nav-links">
-            <a href="#features">Features</a>
-            <a href="#pipeline">Pipeline</a>
             <a href="#portfolio">Portfolio</a>
-            <a href="#apply">Agents</a>
+            <a href="#pipeline">Pipeline</a>
+            <a href="#features">Why OmniVault?</a>
+            <a href="#how-it-works">How It Works</a>
           </div>
           <div className={`nav-connect${isConnected ? ' nav-connect--active' : ' nav-connect--idle'}`}>
             <WalletButton />
@@ -80,7 +80,7 @@ export default function Home() {
           </p>
           <div className="hero-actions">
             <a href="#portfolio" className="btn-primary">Start Investing</a>
-            <a href="#apply" className="btn-secondary">Agent Network</a>
+            <a href="/agent-sim" className="btn-secondary">Agent Hub</a>
           </div>
         </div>
         <div className="hero-visual">
@@ -262,7 +262,7 @@ export default function Home() {
             </div>
             <div className="footer-column">
               <h4>Agents</h4>
-              <a href="/agent-sim">Agent Simulator ↗</a>
+              <a href="/agent-sim">Agent Hub ↗</a>
               <a href="https://github.com/dinghdong/OmniVault" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
               <a href="https://twitter.com" target="_blank" rel="noopener noreferrer">Twitter ↗</a>
             </div>
