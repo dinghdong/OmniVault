@@ -4,7 +4,6 @@ import Modal from '../components/Modal';
 import DepositModal from '../components/DepositModal';
 import WithdrawModal from '../components/WithdrawModal';
 import ProjectsSection from '../components/ProjectsSection';
-import AgentNetworkSection from '../components/AgentNetworkSection';
 import LPDashboard from '../components/LPDashboard';
 import { useAccount, useChainId, useSwitchChain } from 'wagmi';
 import { useReadContract } from 'wagmi';
@@ -203,9 +202,6 @@ export default function Home() {
 
       {/* ── AI Audit Pipeline ─────────────────────────────────────────────── */}
       <ProjectsSection />
-
-      {/* ── Agent Network ─────────────────────────────────────────────────── */}
-      <AgentNetworkSection />
 
       <section className="how-it-works" id="how-it-works">
         <div className="section-header centered">

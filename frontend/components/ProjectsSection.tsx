@@ -321,12 +321,63 @@ export default function ProjectsSection() {
 
   const isLoading = statsLoading || projLoading;
 
+  const SubmitCTA = () => (
+    <a
+      href="/agent-sim"
+      className="submit-project-cta"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 16,
+        padding: '18px 24px',
+        marginBottom: 28,
+        background: 'rgba(0,255,136,0.04)',
+        border: '1px dashed rgba(0,255,136,0.3)',
+        borderRadius: 12,
+        textDecoration: 'none',
+        transition: 'all 0.2s',
+      }}
+    >
+      <div>
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 14,
+          fontWeight: 600,
+          color: '#00ff88',
+          marginBottom: 4,
+          letterSpacing: '0.02em',
+        }}>
+          Submit Project
+        </div>
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 11,
+          color: 'rgba(255,255,255,0.4)',
+        }}>
+          Mint an NFA identity and apply for funding
+        </div>
+      </div>
+      <span style={{
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 12,
+        color: '#00ff88',
+        whiteSpace: 'nowrap',
+      }}>
+        Get Started →
+      </span>
+    </a>
+  );
+
   if (!isLoading && projectCount === 0) {
     return (
       <section className="projects-section" id="pipeline">
         <div className="section-header centered">
           <h2 className="section-title">AI Audit Pipeline</h2>
           <p className="section-subtitle">No projects submitted yet — be the first to apply</p>
+        </div>
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px' }}>
+          <SubmitCTA />
         </div>
       </section>
     );
@@ -348,14 +399,17 @@ export default function ProjectsSection() {
           <div className="proj-spinner" />
         </div>
       ) : (
-        <div className="projects-grid">
-          {[...projects].reverse().map((p) => (
-            <ProjectCard
-              key={p.projectId}
-              project={p}
-              onViewAudit={(id) => router.push(`/audit/${id}`)}
-            />
-          ))}
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px' }}>
+          <SubmitCTA />
+          <div className="projects-grid">
+            {[...projects].reverse().map((p) => (
+              <ProjectCard
+                key={p.projectId}
+                project={p}
+                onViewAudit={(id) => router.push(`/audit/${id}`)}
+              />
+            ))}
+          </div>
         </div>
       )}
     </section>
