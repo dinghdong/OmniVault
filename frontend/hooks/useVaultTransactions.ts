@@ -18,7 +18,9 @@ export function useVaultTransactions() {
   // missing from the wagmi config) — useChainId() only reflects the config's
   // active chain and falls back to the default chain, masking mismatches.
   const { address, chainId: walletChainId } = useAccount();
-  const { data: ethBalance } = useBalance({ address });
+  // Pin the balance read to the contracts' chain so a multi-chain wallet always
+  // shows spendable Arbitrum Sepolia ETH (not whatever chain it's parked on).
+  const { data: ethBalance } = useBalance({ address, chainId: contractChainId });
   const { switchChain } = useSwitchChain();
 
   const isWrongChain = !!address && walletChainId !== contractChainId;

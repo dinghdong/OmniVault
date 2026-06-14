@@ -18,6 +18,11 @@ export default function DepositModal() {
     if (depositState.isConfirmed) setAmount('');
   }, [depositState.isConfirmed]);
 
+  // Native-ETH deposits must leave headroom for gas — sending the full balance
+  // as `value` fails with "insufficient funds for gas + value" in the wallet.
+  const GAS_RESERVE = 0.001;
+  const maxDepositable = Math.max(0, parseFloat(balances.eth || '0') - GAS_RESERVE);
+
   const handleDeposit = () => {
     if (!address || !amount || parseFloat(amount) <= 0) return;
     deposit(amount);
@@ -43,7 +48,7 @@ export default function DepositModal() {
     <div className="action-form">
       {isWrongChain && (
         <div className="wrong-chain-banner">
-          ⚠️ Wrong network — contracts are on Hardhat (31337).{' '}
+          ⚠️ Wrong network — contracts are on Arbitrum Sepolia.{' '}
           <button className="chain-switch-btn" onClick={switchToCorrectChain}>
             Switch Network
           </button>
@@ -68,7 +73,7 @@ export default function DepositModal() {
             onChange={e => setAmount(e.target.value)}
           />
           <span className="input-suffix">ETH</span>
-          <button className="btn-max" onClick={() => setAmount(parseFloat(balances.eth).toFixed(4))}>
+          <button className="btn-max" onClick={() => setAmount(maxDepositable.toFixed(4))}>
             MAX
           </button>
         </div>
