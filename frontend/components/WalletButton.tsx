@@ -39,16 +39,10 @@ export default function WalletButton() {
     if (isConnected) {
       disconnect();
     } else {
-      // If an injected provider (MetaMask / test mock) is present, connect directly
-      // without opening the ConnectKit modal — faster UX and works in headless tests.
-      const injected = connectors.find(
-        (c) => (c as any).type === 'injected' || c.id === 'injected' || c.id === 'io.metamask'
-      );
-      if (injected && typeof window !== 'undefined' && (window as any).ethereum) {
-        connect({ connector: injected });
-      } else {
-        setOpen(true);
-      }
+      // Always open the ConnectKit modal so users can pick their wallet.
+      // Auto-connecting to an injected provider breaks when multiple wallets
+      // (MetaMask + Rabby) are installed or when injection is in a bad state.
+      setOpen(true);
     }
   };
 
