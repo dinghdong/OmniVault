@@ -279,7 +279,7 @@ export default function AgentNetworkSection() {
           {/* ── Right: CTA cards ──────────────────────────────────────────── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-            {/* Agent Simulator card */}
+            {/* Agent Hub card: mint NFA + submit project in one flow */}
             <div style={{
               background: '#0d1117',
               border: '1px solid rgba(0,255,136,0.15)',
@@ -294,7 +294,7 @@ export default function AgentNetworkSection() {
                       <path d="M7 9h3.5" stroke="#00ff88" strokeWidth="1.2" strokeLinecap="round"/>
                     </svg>
                   </div>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#fff', fontWeight: 500 }}>Agent Simulator</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#fff', fontWeight: 500 }}>Agent Hub</span>
                   <span style={{
                     marginLeft: 'auto', fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
                     color: '#00ff88', background: 'rgba(0,255,136,0.08)',
@@ -302,28 +302,24 @@ export default function AgentNetworkSection() {
                   }}>DEVTOOL</span>
                 </div>
 
-                {/* Mini calldata preview */}
-                <pre style={{
-                  margin: '0 0 14px', padding: '10px 12px',
-                  background: '#010409', borderRadius: 7,
-                  border: '1px solid rgba(255,255,255,0.05)',
-                  fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-                  lineHeight: 1.8, color: '#e6edf3', overflow: 'hidden',
-                }}>
-                  <span style={{ color: '#3d444d' }}>{'//'} manually simulate agent calls{'\n'}</span>
-                  <span style={{ color: '#00ff88' }}>im</span><span style={{ color: '#6e7681' }}>.</span><span style={{ color: '#00ff88' }}>submitProject</span><span style={{ color: '#6e7681' }}>{'('}</span>{'\n'}
-                  {'  '}<span style={{ color: '#8b949e' }}>agentDid  </span><span style={{ color: '#6e7681' }}>: </span><span style={{ color: '#a5d6ff' }}>"did:nfa:…"</span><span style={{ color: '#f87171' }}>{' ← select NFA'}</span>{'\n'}
-                  {'  '}<span style={{ color: '#8b949e' }}>commitHash</span><span style={{ color: '#6e7681' }}>: </span><span style={{ color: '#f87171' }}>"0x__________"</span>{'\n'}
-                  <span style={{ color: '#6e7681' }}>{')'}</span>
-                </pre>
-
                 <p style={{
-                  margin: '0 0 16px',
+                  margin: '0 0 14px',
                   fontFamily: 'inherit', fontSize: 13,
                   color: 'rgba(255,255,255,0.45)', lineHeight: 1.6,
                 }}>
-                  Manually simulate what autonomous agents do — submit projects using your NFA identity.
+                  Mint an NFA identity and submit projects to the AI audit pipeline. One place to manage your on-chain Agent.
                 </p>
+
+                <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                  {['did:nfa:…', 'ERC-721', 'submitProject', 'arb-sepolia'].map(tag => (
+                    <span key={tag} style={{
+                      fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+                      color: 'rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.04)',
+                      border: '1px solid rgba(255,255,255,0.07)',
+                      padding: '2px 7px', borderRadius: 4,
+                    }}>{tag}</span>
+                  ))}
+                </div>
 
                 <a href="/agent-sim" className="agnet-cta-btn" style={{
                   display: 'block', textAlign: 'center',
@@ -335,54 +331,9 @@ export default function AgentNetworkSection() {
                   fontWeight: 500, textDecoration: 'none',
                   letterSpacing: '0.03em',
                 }}>
-                  Open Agent Simulator →
+                  Open Agent Hub →
                 </a>
               </div>
-            </div>
-
-            {/* Mint NFA card */}
-            <div style={{
-              background: '#0d1117',
-              border: '1px solid rgba(255,255,255,0.07)',
-              borderRadius: 12, padding: '18px 20px',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <div style={{ width: 28, height: 28, borderRadius: 7, background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke="#a78bfa" strokeWidth="1.2"/>
-                    <path d="M7 4.5v5M4.5 7h5" stroke="#a78bfa" strokeWidth="1.2" strokeLinecap="round"/>
-                  </svg>
-                </div>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#fff', fontWeight: 500 }}>NFA Identity</span>
-              </div>
-              <p style={{
-                margin: '0 0 14px',
-                fontFamily: 'inherit', fontSize: 13,
-                color: 'rgba(255,255,255,0.4)', lineHeight: 1.6,
-              }}>
-                Non-Fungible Agent — on-chain identity for your AI. Mint once, sign forever.
-              </p>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-                {['did:nfa:…', 'ERC-721', 'arb-sepolia'].map(tag => (
-                  <span key={tag} style={{
-                    fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
-                    color: 'rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,255,255,0.07)',
-                    padding: '2px 7px', borderRadius: 4,
-                  }}>{tag}</span>
-                ))}
-              </div>
-              <a href="/agent-sim" className="agnet-sim-btn" style={{
-                display: 'block', textAlign: 'center',
-                padding: '10px 16px',
-                background: 'transparent',
-                border: '1px solid rgba(167,139,250,0.2)',
-                borderRadius: 8, color: 'rgba(167,139,250,0.7)',
-                fontFamily: "'JetBrains Mono', monospace", fontSize: 12,
-                textDecoration: 'none', letterSpacing: '0.03em',
-              }}>
-                Mint NFA Identity →
-              </a>
             </div>
 
             {/* How it works mini list */}
