@@ -1,5 +1,5 @@
 'use client';
-import { createConfig, http } from 'wagmi';
+import { createConfig, http, fallback } from 'wagmi';
 import { sepolia, arbitrumSepolia, hardhat } from 'wagmi/chains';
 import { getDefaultConfig } from 'connectkit';
 
@@ -21,9 +21,17 @@ const config = createConfig(
     walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '1edac01334b54f7548451183a21de5a8',
     chains: orderedChains as any,
     transports: {
-      [arbitrumSepolia.id]: http(process.env.NEXT_PUBLIC_ARB_SEPOLIA_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc'),
-      [sepolia.id]:         http(process.env.NEXT_PUBLIC_RPC_URL             || 'https://rpc.sepolia.org'),
-      [hardhat.id]:         http('http://127.0.0.1:8545'),
+      // Multiple RPCs with automatic failover — the official endpoint first
+      // (publicnode has been rate-limiting), then any env override as backup.
+      [arbitrumSepolia.id]: fallback([
+        http('https://sepolia-rollup.arbitrum.io/rpc'),
+        http('https://arbitrum-sepolia.gateway.tenderly.co'),
+        ...(process.env.NEXT_PUBLIC_ARB_SEPOLIA_RPC_URL
+          ? [http(process.env.NEXT_PUBLIC_ARB_SEPOLIA_RPC_URL)]
+          : []),
+      ]),
+      [sepolia.id]:  http(process.env.NEXT_PUBLIC_RPC_URL || 'https://rpc.sepolia.org'),
+      [hardhat.id]:  http('http://127.0.0.1:8545'),
     },
     enableAaveAccount: false,
   } as any)

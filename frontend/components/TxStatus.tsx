@@ -148,7 +148,11 @@ export default function TxStatus({ state, chainId, onReset, label }: TxStatusPro
 
   // error
   if (state.error) {
-    const msg = state.error.length > 120 ? state.error.slice(0, 120) + '…' : state.error;
+    // Show the wallet/RPC's first meaningful line — the short reason usually
+    // sits before viem's "Request Arguments:" / "Version:" boilerplate.
+    const firstLine = state.error.split('\n').find(l => l.trim().length > 0) || state.error;
+    const shortReason = firstLine.length > 200 ? firstLine.slice(0, 200) + '…' : firstLine;
+    const copyErr = () => navigator.clipboard.writeText(state.error || '');
     return (
       <div className="txs-screen txs-screen--error">
         <div className="txs-icon-wrap txs-error">
@@ -158,8 +162,13 @@ export default function TxStatus({ state, chainId, onReset, label }: TxStatusPro
           </svg>
         </div>
         <div className="txs-title txs-title--error">Transaction Failed</div>
-        <div className="txs-error-msg">{msg}</div>
-        <button className="txs-retry-btn" onClick={onReset}>Try Again</button>
+        <div className="txs-error-msg">{shortReason}</div>
+        <div className="txs-actions-row">
+          <button className="txs-retry-btn" onClick={onReset}>Try Again</button>
+          <button className="txs-copy-err-btn" onClick={copyErr} title="Copy full error">
+            Copy error
+          </button>
+        </div>
       </div>
     );
   }

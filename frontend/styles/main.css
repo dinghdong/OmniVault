@@ -1504,6 +1504,26 @@ input, textarea { font-family: inherit; }
 }
 .txs-retry-btn:hover { background: rgba(239, 68, 68, 0.2); }
 
+.txs-actions-row {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+  align-items: center;
+}
+.txs-actions-row .txs-retry-btn { margin-top: 0; }
+.txs-copy-err-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  color: #aaa;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.6rem 1.2rem;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.txs-copy-err-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+
 .txs-error-msg {
   font-size: 0.75rem;
   color: #ef4444;
