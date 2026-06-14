@@ -1,7 +1,7 @@
 'use client';
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import Head from 'next/head';
-import { useAccount, useReadContract, useReadContracts } from 'wagmi';
+import { useAccount, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { formatEther } from 'viem';
 import { nfaAddress, nfaAbi, fundVaultAddress, fundVaultAbi, investmentManagerAddress, investmentManagerAbi, contractChainId } from '../hooks/contracts';
 import { useProjectSubmit } from '../hooks/useProjectSubmit';
@@ -81,7 +81,49 @@ export default function AgentSimPage() {
   const [amount, setAmount]           = useState('');
   const [dragging, setDragging]       = useState(false);
   const [localError, setLocalError]   = useState('');
+  const [showMintForm, setShowMintForm] = useState(false);
+  const [mintRepo, setMintRepo]       = useState('');
+  const [mintApi, setMintApi]         = useState('');
+  const [mintModel, setMintModel]     = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // ── Mint NFA ───────────────────────────────────────────────────────────────
+  const {
+    writeContract: writeMint,
+    data: mintTxHash,
+    isPending: isMintPending,
+    error: mintError,
+    reset: resetMint,
+  } = useWriteContract();
+
+  const { isLoading: isMintConfirming, isSuccess: isMintConfirmed } =
+    useWaitForTransactionReceipt({ hash: mintTxHash });
+
+  const handleMint = useCallback(() => {
+    if (!address) return;
+    if (!mintRepo.trim()) { setLocalError('Agent repo is required'); return; }
+    if (!mintApi.trim()) { setLocalError('API endpoint is required'); return; }
+    if (!mintModel.trim()) { setLocalError('Model is required'); return; }
+    setLocalError('');
+    writeMint({
+      address: nfaAddress,
+      abi: nfaAbi,
+      functionName: 'mint',
+      args: [mintRepo.trim(), mintApi.trim(), mintModel.trim()],
+      chainId: contractChainId,
+      account: address,
+    } as any);
+  }, [writeMint, address, mintRepo, mintApi, mintModel]);
+
+  useEffect(() => {
+    if (isMintConfirmed) {
+      setShowMintForm(false);
+      setMintRepo('');
+      setMintApi('');
+      setMintModel('');
+      resetMint();
+    }
+  }, [isMintConfirmed, resetMint]);
 
   // ── Chain reads ────────────────────────────────────────────────────────────
   const { data: tokenIds } = useReadContract({
@@ -254,7 +296,11 @@ export default function AgentSimPage() {
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: 'rgba(255,255,255,0.3)', padding: '8px 0' }}>
                       No NFA tokens found for {address.slice(0,8)}…
                     </div>
-                    <div className="nfa-pill" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 9, border: '1px dashed rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.35)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
+                    <div
+                      className="nfa-pill"
+                      onClick={() => setShowMintForm(true)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 9, border: '1px dashed rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.35)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, cursor: 'pointer' }}
+                    >
                       <span style={{ fontSize: 15, lineHeight: 1 }}>+</span> Mint Agent Identity
                     </div>
                   </div>
@@ -277,7 +323,11 @@ export default function AgentSimPage() {
                         </div>
                       );
                     })}
-                    <div className="nfa-pill" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 9, border: '1px dashed rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.3)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
+                    <div
+                      className="nfa-pill"
+                      onClick={() => setShowMintForm(true)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 9, border: '1px dashed rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.3)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, cursor: 'pointer' }}
+                    >
                       <span style={{ fontSize: 15, lineHeight: 1 }}>+</span> Mint
                     </div>
                   </div>
@@ -293,6 +343,37 @@ export default function AgentSimPage() {
                         <span style={{ color: selected.color, opacity: 0.85, wordBreak: 'break-all' }}>{v || '—'}</span>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* Mint NFA form */}
+                {showMintForm && (
+                  <div className="nfa-terminal" style={{ marginTop: 12, background: '#010409', border: '1px solid rgba(0,255,136,0.15)', borderRadius: 6, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#00ff88', letterSpacing: '0.1em' }}>MINT NEW NFA IDENTITY</div>
+                    <input className="mono-in" style={monoInput} placeholder="Repo URL" value={mintRepo} onChange={e => setMintRepo(e.target.value)} />
+                    <input className="mono-in" style={monoInput} placeholder="API Endpoint" value={mintApi} onChange={e => setMintApi(e.target.value)} />
+                    <input className="mono-in" style={monoInput} placeholder="Model (e.g. claude-3.5-sonnet)" value={mintModel} onChange={e => setMintModel(e.target.value)} />
+                    {(localError || mintError) && (
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#f87171', padding: '6px 8px', background: 'rgba(248,113,113,0.08)', borderRadius: 4 }}>
+                        {(mintError as any)?.shortMessage ?? localError ?? String(mintError)}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        className="exec-btn"
+                        disabled={isMintPending || isMintConfirming}
+                        onClick={handleMint}
+                        style={{ flex: 1, padding: '10px 14px', background: 'rgba(0,255,136,0.08)', border: '1px solid rgba(0,255,136,0.25)', borderRadius: 6, color: '#00ff88', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, cursor: 'pointer' }}
+                      >
+                        {isMintPending || isMintConfirming ? 'Minting…' : 'Mint NFA'}
+                      </button>
+                      <button
+                        onClick={() => { setShowMintForm(false); setLocalError(''); resetMint(); }}
+                        style={{ padding: '10px 14px', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: 'rgba(255,255,255,0.4)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, cursor: 'pointer' }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 )}
               </section>
