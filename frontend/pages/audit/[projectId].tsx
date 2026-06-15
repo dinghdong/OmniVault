@@ -2,8 +2,8 @@
 import { useRouter } from 'next/router';
 import { useChainId } from 'wagmi';
 import Head from 'next/head';
-import Link from 'next/link';
 import AuditStatusView from '../../components/AuditStatusView';
+import PageHeader from '../../components/PageHeader';
 
 export default function AuditPage() {
   const router = useRouter();
@@ -18,20 +18,12 @@ export default function AuditPage() {
       </Head>
 
       <div className="detail-page">
-        <header className="detail-page-header">
-          <Link href="/#pipeline" className="detail-page-back">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5"
-                strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Back to Pipeline
-          </Link>
-
-          <div className="detail-page-title">
-            <span className="detail-page-title-label">AI Audit Report</span>
-            {projectId && <span className="detail-page-title-id">Project #{projectId}</span>}
-          </div>
-        </header>
+        <PageHeader
+          backHref="/#pipeline"
+          backLabel="Back to Pipeline"
+          label="AI Audit Report"
+          title={projectId ? `Project #${projectId}` : 'Project'}
+        />
 
         <main className="detail-page-main">
           {!projectId ? (

@@ -1,7 +1,6 @@
 'use client';
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import Head from 'next/head';
-import Link from 'next/link';
 import { useAccount, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { formatEther, parseEther, encodeAbiParameters } from 'viem';
 import {
@@ -12,6 +11,7 @@ import {
   worldCupAgentVaultAddress,
 } from '../hooks/contracts';
 import { useProjectSubmit } from '../hooks/useProjectSubmit';
+import PageHeader from '../components/PageHeader';
 
 /* ─── Geometric pixel avatar from token ID ───────────────────────────────── */
 function AgentAvatar({ id, color, size = 34 }: { id: number; color: string; size?: number }) {
@@ -294,22 +294,14 @@ export default function AgentSimPage() {
       <div className="agent-sim-root">
         <div className="agent-sim-container">
 
-          <header className="as-header">
-            <div className="as-title-block">
-              <Link href="/" className="as-back">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                  <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                Back to OmniVault
-              </Link>
-              <div className="as-title-label">Autonomous Agent Interface</div>
-              <h1 className="as-title">Agent Hub</h1>
-            </div>
-            <div className="as-status-pill">
-              <span className="as-status-dot" />
-              Live on Arbitrum Sepolia
-            </div>
-          </header>
+          <PageHeader
+            backHref="/"
+            backLabel="Back to OmniVault"
+            label="Autonomous Agent Interface"
+            title="Agent Hub"
+            badge="Live on Arbitrum Sepolia"
+            badgePulse
+          />
 
           <main className="as-grid">
 
