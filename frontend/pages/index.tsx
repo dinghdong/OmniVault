@@ -132,14 +132,16 @@ export default function Home() {
         </div>
         {isConnected ? (
           <div className="portfolio-connected">
-            <div className="portfolio-card main-balance">
-              <div className="card-label">Your FundToken Balance</div>
-              <div className="card-value">{userFtBalance}</div>
-              <div className="card-usd">OVFT (rebasing ETH shares)</div>
-            </div>
-            <div className="card-actions">
-              <button className="btn-primary" onClick={() => setDepositOpen(true)}>Deposit</button>
-              <button className="btn-secondary" onClick={() => setWithdrawOpen(true)}>Withdraw</button>
+            <div className="portfolio-hero">
+              <div className="portfolio-hero-info">
+                <div className="portfolio-hero-label">Your FundToken Balance</div>
+                <div className="portfolio-hero-value">{userFtBalance}</div>
+                <div className="portfolio-hero-sub">OVFT (rebasing ETH shares)</div>
+              </div>
+              <div className="portfolio-hero-actions">
+                <button className="btn-primary" onClick={() => setDepositOpen(true)}>Deposit</button>
+                <button className="btn-secondary" onClick={() => setWithdrawOpen(true)}>Withdraw</button>
+              </div>
             </div>
             <LPDashboard />
           </div>
