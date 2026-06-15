@@ -7,29 +7,17 @@ import { formatEther, parseEther, encodeAbiParameters } from 'viem';
 import {
   nfaAddress, nfaAbi,
   fundVaultAddress, fundVaultAbi,
-  investmentManagerAddress, investmentManagerAbi,
   mockPolyMarketAddress, mockPolyMarketAbi,
   contractChainId,
   worldCupAgentVaultAddress,
 } from '../hooks/contracts';
 import { useProjectSubmit } from '../hooks/useProjectSubmit';
 
-/* ─── Helpers ──────────────────────────────────────────────────────────────── */
-function oddsString(oddsWei: bigint) {
-  return parseFloat(formatEther(oddsWei)).toFixed(2);
-}
-
-function toDateTimeLocal(tsSec: number) {
-  const d = new Date(tsSec * 1000);
-  const offset = d.getTimezoneOffset() * 60_000;
-  return new Date(d.getTime() - offset).toISOString().slice(0, 16);
-}
-
 /* ─── Geometric pixel avatar from token ID ───────────────────────────────── */
 function AgentAvatar({ id, color, size = 34 }: { id: number; color: string; size?: number }) {
   const grid = Array.from({ length: 3 }, (_, r) =>
     Array.from({ length: 3 }, (_, c) => c === 2
-      ? ((id * 137 + r * 31) % 7 < 4)   // mirror col 0
+      ? ((id * 137 + r * 31) % 7 < 4)
       : ((id * 137 + (r * 3 + c) * 31) % 7 < 4)
     )
   );
@@ -44,7 +32,7 @@ function AgentAvatar({ id, color, size = 34 }: { id: number; color: string; size
   );
 }
 
-const AGENT_COLORS = ['#00ff88', '#63b3ed', '#a78bfa', '#f97316', '#f2cc60'];
+const AGENT_COLORS = ['#ccff00', '#00f0ff', '#ffb800', '#ff2a6d', '#a78bfa'];
 
 const BET_REQUEST_TYPES = [
   { name: 'matchId', type: 'uint256' },
@@ -54,6 +42,17 @@ const BET_REQUEST_TYPES = [
   { name: 'deadline', type: 'uint256' },
   { name: 'nonce', type: 'uint256' },
 ] as const;
+
+/* ─── Helpers ──────────────────────────────────────────────────────────────── */
+function oddsString(oddsWei: bigint) {
+  return parseFloat(formatEther(oddsWei)).toFixed(2);
+}
+
+function toDateTimeLocal(tsSec: number) {
+  const d = new Date(tsSec * 1000);
+  const offset = d.getTimezoneOffset() * 60_000;
+  return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+}
 
 /* ─── Main page ──────────────────────────────────────────────────────────── */
 export default function AgentSimPage() {
@@ -225,25 +224,24 @@ export default function AgentSimPage() {
     }
   }, [matchId, outcomeIndex, betAmount, minOdds, deadline, nonce]);
 
-  const applyEncodedBet = () => {
-    if (encodedBetRequest && encodedBetRequest !== '0x') {
-      setInitData(encodedBetRequest);
-    }
-  };
-
   useEffect(() => {
     if (encodedBetRequest && encodedBetRequest !== '0x') {
       setInitData(encodedBetRequest);
     }
   }, [encodedBetRequest]);
 
+  const selectOutcome = (m: typeof matches[number], idx: number) => {
+    setMatchId(String(m.matchId));
+    setOutcomeIndex(String(idx));
+    const odds = [m.homeOdds, m.drawOdds, m.awayOdds][idx];
+    setMinOdds(oddsString(odds));
+    setDeadline(toDateTimeLocal(m.expiration));
+    setNonce(String(Math.floor(Math.random() * 1e12)));
+    if (!betAmount) setBetAmount(amount || '0.01');
+  };
+
   // ── Submit ─────────────────────────────────────────────────────────────────
   const effectiveInitData = (initData && initData !== '0x') ? initData : encodedBetRequest;
-
-  const canExecute = !!selected && !!contractAddr && /^0x[0-9a-fA-F]{40}$/.test(contractAddr)
-    && !!amount && parseFloat(amount) > 0
-    && !!effectiveInitData && effectiveInitData !== '0x'
-    && !state.isPending && !state.isConfirming;
 
   const handleExecute = async () => {
     setLocalError('');
@@ -252,7 +250,7 @@ export default function AgentSimPage() {
     if (!/^0x[0-9a-fA-F]{40}$/.test(contractAddr)) { setLocalError('Enter a valid target contract address.'); return; }
     if (!amount || parseFloat(amount) <= 0) { setLocalError('Enter funding amount.'); return; }
     const data = effectiveInitData;
-    if (!data || data === '0x') { setLocalError('Provide initData (hex bytes) or build a BetRequest.'); return; }
+    if (!data || data === '0x') { setLocalError('Select a match and build a BetRequest.'); return; }
 
     try {
       const { parseEther } = await import('viem');
@@ -268,17 +266,20 @@ export default function AgentSimPage() {
   // After confirmed
   if (state.isConfirmed && state.projectId !== null) {
     return (
-      <div className="page-container agent-success">
-        <div>
-          <div className="agent-success-icon">✓</div>
-          <div className="agent-success-title">Project #{state.projectId} submitted</div>
-          <div className="agent-success-hash">{state.hash?.slice(0, 20)}…</div>
-          <button
-            className="btn-primary"
-            onClick={() => { resetSubmit(); setContractAddr(worldCupAgentVaultAddress); setAmount(''); setInitData('0x'); setSelectedId(null); }}
-          >
-            ← New Simulation
-          </button>
+      <div className="agent-sim-root">
+        <div className="agent-sim-container">
+          <div className="as-success">
+            <div className="as-success-icon">✓</div>
+            <div className="as-success-title">Project #{state.projectId} Submitted</div>
+            <div className="as-mono" style={{ color: 'var(--as-text-dim)' }}>{state.hash?.slice(0, 22)}…</div>
+            <button
+              className="as-btn-primary"
+              style={{ maxWidth: 280, marginTop: 12 }}
+              onClick={() => { resetSubmit(); setContractAddr(worldCupAgentVaultAddress); setAmount(''); setInitData('0x'); setSelectedId(null); setMatchId(''); setBetAmount(''); }}
+            >
+              ← New Simulation
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -288,57 +289,50 @@ export default function AgentSimPage() {
     <>
       <Head>
         <title>Agent Hub — OmniVault</title>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@500;600;700&display=swap" rel="stylesheet" />
       </Head>
 
-      <div className="detail-page">
-        <header className="detail-page-header">
-          <Link href="/" className="detail-page-back">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Back
-          </Link>
-          <div className="detail-page-title">
-            <span className="detail-page-title-label">Agent Hub</span>
-            <span className="detail-page-title-id">Submit Project</span>
-          </div>
-        </header>
+      <div className="agent-sim-root">
+        <div className="agent-sim-container">
 
-        <main className="detail-page-main">
-          <div className="detail-card">
-            <div className="detail-card-body">
+          <header className="as-header">
+            <div className="as-title-block">
+              <Link href="/" className="as-back">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                  <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Back to OmniVault
+              </Link>
+              <div className="as-title-label">Autonomous Agent Interface</div>
+              <h1 className="as-title">Agent Hub</h1>
+            </div>
+            <div className="as-status-pill">
+              <span className="as-status-dot" />
+              Live on Arbitrum Sepolia
+            </div>
+          </header>
 
-              {/* ① AGENT_IDENTITY */}
-              <section>
-                <div className="detail-section-label">
-                  <span className="detail-section-number">①</span>
-                  <span>AGENT_IDENTITY</span>
-                  <span className="detail-section-line" />
-                </div>
+          <main className="as-grid">
+
+            {/* LEFT COLUMN */}
+            <div className="as-col">
+
+              {/* Agent Identity */}
+              <section className="as-panel as-panel-pad" style={{ marginBottom: 20 }}>
+                <div className="as-section-head">Agent Identity</div>
 
                 {!address ? (
-                  <div className="agent-wallet-prompt">
-                    Connect wallet to view your NFA tokens →{' '}
-                    <Link href="/">Connect</Link>
-                  </div>
+                  <div className="as-alert">Connect wallet to view your NFA tokens.</div>
                 ) : agents.length === 0 ? (
-                  <div className="agent-pills">
-                    <div className="agent-wallet-prompt" style={{ padding: 0 }}>
+                  <>
+                    <div className="as-mono" style={{ color: 'var(--as-text-dim)', fontSize: 13, marginBottom: 14 }}>
                       No NFA tokens found for {address.slice(0, 8)}…
                     </div>
-                    <button
-                      type="button"
-                      className="agent-pill-add"
-                      onClick={() => setShowMintForm(true)}
-                    >
-                      <span style={{ fontSize: 15, lineHeight: 1 }}>+</span> Mint Agent Identity
+                    <button className="as-agent-add" onClick={() => setShowMintForm(true)}>
+                      <span>+</span> Mint Agent Identity
                     </button>
-                  </div>
+                  </>
                 ) : (
-                  <div className="agent-pills">
+                  <div className="as-agent-list">
                     {agents.map(agent => {
                       const sel = selectedId === agent.id;
                       return (
@@ -346,208 +340,130 @@ export default function AgentSimPage() {
                           key={agent.id}
                           type="button"
                           onClick={() => setSelectedId(sel ? null : agent.id)}
-                          className={`agent-pill ${sel ? 'selected' : ''}`}
-                          style={sel ? { borderColor: agent.color + '50', boxShadow: `0 0 16px ${agent.color}18` } : undefined}
+                          className={`as-agent-pill ${sel ? 'selected' : ''}`}
                         >
-                          <AgentAvatar id={agent.id} color={agent.color} />
+                          <AgentAvatar id={agent.id} color={agent.color} size={28} />
                           <div>
-                            <div className={`agent-pill-name ${sel ? 'selected' : ''}`} style={sel ? { color: agent.color } : undefined}>
+                            <div className="as-agent-pill-name" style={sel ? { color: agent.color } : undefined}>
                               Agent #{String(agent.id).padStart(3, '0')}
                             </div>
-                            <div className="agent-pill-model">{agent.model || '—'}</div>
+                            <div className="as-agent-pill-model">{agent.model || '—'}</div>
                           </div>
-                          {sel && (
-                            <div style={{
-                              width: 5, height: 5, borderRadius: '50%', background: agent.color,
-                              boxShadow: `0 0 8px ${agent.color}`, animation: 'pulse 1.8s infinite'
-                            }} />
-                          )}
                         </button>
                       );
                     })}
-                    <button
-                      type="button"
-                      className="agent-pill-add"
-                      onClick={() => setShowMintForm(true)}
-                    >
-                      <span style={{ fontSize: 15, lineHeight: 1 }}>+</span> Mint
+                    <button className="as-agent-add" onClick={() => setShowMintForm(true)}>
+                      <span>+</span> Mint
                     </button>
                   </div>
                 )}
 
                 {selected && (
-                  <div className="agent-terminal" style={{ borderLeftColor: selected.color + '80' }}>
-                    {(['id', 'repo', 'endpoint', 'model'] as const).map(k => (
-                      <div key={k} className="agent-terminal-row">
-                        <span style={{ color: 'rgba(255,255,255,0.15)' }}>{'> '}</span>
-                        <span className="agent-terminal-key">{k.padEnd(8)}</span>
-                        <span style={{ color: 'rgba(255,255,255,0.15)' }}>:</span>
-                        <span className="agent-terminal-value" style={{ color: selected.color, opacity: 0.9 }}>
-                          {k === 'id' ? selected.id : (selected as any)[k === 'endpoint' ? 'apiEndpoint' : k] || '—'}
-                        </span>
-                      </div>
-                    ))}
+                  <div className="as-agent-card" style={{ borderLeftColor: selected.color }}>
+                    <div className="as-agent-card-row"><span className="as-agent-card-key">id</span><span className="as-agent-card-val">{selected.id}</span></div>
+                    <div className="as-agent-card-row"><span className="as-agent-card-key">repo</span><span style={{ color: 'var(--as-text)' }}>{selected.repo || '—'}</span></div>
+                    <div className="as-agent-card-row"><span className="as-agent-card-key">endpoint</span><span style={{ color: 'var(--as-text)' }}>{selected.apiEndpoint || '—'}</span></div>
+                    <div className="as-agent-card-row"><span className="as-agent-card-key">model</span><span style={{ color: 'var(--as-text)' }}>{selected.model || '—'}</span></div>
                   </div>
                 )}
 
-                {/* Mint NFA form */}
                 {showMintForm && (
-                  <div className="agent-mint-form">
-                    <div className="agent-mint-title">MINT NEW NFA IDENTITY</div>
-                    <div className="input-group">
-                      <input className="input-field" placeholder="Repo URL" value={mintRepo} onChange={e => setMintRepo(e.target.value)} />
-                    </div>
-                    <div className="input-group">
-                      <input className="input-field" placeholder="API Endpoint" value={mintApi} onChange={e => setMintApi(e.target.value)} />
-                    </div>
-                    <div className="input-group">
-                      <input className="input-field" placeholder="Model (e.g. claude-3.5-sonnet)" value={mintModel} onChange={e => setMintModel(e.target.value)} />
-                    </div>
-                    <div className="input-group">
-                      <input className="input-field" placeholder="teeMrenclave (0x + 64 hex)" value={mintMrenclave} onChange={e => setMintMrenclave(e.target.value)} />
-                    </div>
-                    <div className="input-group">
-                      <input className="input-field" placeholder="teePublicKey (hex bytes)" value={mintPubKey} onChange={e => setMintPubKey(e.target.value)} />
+                  <>
+                    <div className="as-divider" />
+                    <div className="as-mint-grid">
+                      <div>
+                        <label className="as-label">Repo URL</label>
+                        <input className="as-input" placeholder="github.com/..." value={mintRepo} onChange={e => setMintRepo(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="as-label">API Endpoint</label>
+                        <input className="as-input" placeholder="https://..." value={mintApi} onChange={e => setMintApi(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="as-label">Model</label>
+                        <input className="as-input" placeholder="claude-3.5-sonnet" value={mintModel} onChange={e => setMintModel(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="as-label">teeMrenclave</label>
+                        <input className="as-input" placeholder="0x + 64 hex" value={mintMrenclave} onChange={e => setMintMrenclave(e.target.value)} />
+                      </div>
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <label className="as-label">teePublicKey</label>
+                        <input className="as-input" placeholder="0x..." value={mintPubKey} onChange={e => setMintPubKey(e.target.value)} />
+                      </div>
                     </div>
                     {(localError || mintError) && (
-                      <div className="info-box error">{(mintError as any)?.shortMessage ?? localError ?? String(mintError)}</div>
+                      <div className="as-alert error" style={{ marginTop: 12 }}>{(mintError as any)?.shortMessage ?? localError ?? String(mintError)}</div>
                     )}
-                    <div className="agent-input-row">
-                      <button
-                        type="button"
-                        className="btn-primary"
-                        disabled={isMintPending || isMintConfirming}
-                        onClick={handleMint}
-                        style={{ flex: 1 }}
-                      >
+                    <div className="as-input-row" style={{ marginTop: 14 }}>
+                      <button className="as-btn-primary" disabled={isMintPending || isMintConfirming} onClick={handleMint} style={{ flex: 1 }}>
                         {isMintPending || isMintConfirming ? 'Minting…' : 'Mint NFA'}
                       </button>
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={() => { setShowMintForm(false); setLocalError(''); resetMint(); }}
-                      >
+                      <button className="as-btn-secondary" onClick={() => { setShowMintForm(false); setLocalError(''); resetMint(); }}>
                         Cancel
                       </button>
                     </div>
-                  </div>
+                  </>
                 )}
               </section>
 
-              {/* ② PROJECT_TARGET */}
-              <section>
-                <div className="detail-section-label">
-                  <span className="detail-section-number">②</span>
-                  <span>PROJECT_TARGET</span>
-                  <span className="detail-section-line" />
-                </div>
-                <div className="input-group">
-                  <label className="input-label">CONTRACT_ADDR</label>
-                  <input className="input-field" placeholder="0x..." value={contractAddr} onChange={e => setContractAddr(e.target.value as `0x${string}`)} />
+              {/* Project Target */}
+              <section className="as-panel as-panel-pad" style={{ marginBottom: 20 }}>
+                <div className="as-section-head">Project Target</div>
+                <label className="as-label">Contract Address</label>
+                <input className="as-input as-mono" value={contractAddr} onChange={e => setContractAddr(e.target.value as `0x${string}`)} />
+              </section>
+
+              {/* Funding */}
+              <section className="as-panel as-panel-pad">
+                <div className="as-section-head">Funding Request</div>
+                <div className="as-input-row">
+                  <input className="as-input" type="number" min="0" step="0.001" placeholder="0.010" value={amount} onChange={e => setAmount(e.target.value)} style={{ maxWidth: 160 }} />
+                  <span className="as-eth-suffix">ETH</span>
+                  <span className="as-vault-hint">vault: {vaultBal} ETH avail</span>
                 </div>
               </section>
 
-              {/* ③ FUNDING_REQUEST */}
-              <section>
-                <div className="detail-section-label">
-                  <span className="detail-section-number">③</span>
-                  <span>FUNDING_REQUEST</span>
-                  <span className="detail-section-line" />
-                </div>
-                <div className="agent-input-row" style={{ alignItems: 'center' }}>
-                  <input className="input-field" type="number" min="0" step="0.001" placeholder="0.100" value={amount} onChange={e => setAmount(e.target.value)} style={{ maxWidth: 140 }} />
-                  <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>ETH</span>
-                  <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--text-muted)' }}>vault: {vaultBal} ETH avail</span>
-                </div>
-              </section>
+            </div>
 
-              {/* ④ AVAILABLE_MATCHES */}
-              <section>
-                <div className="detail-section-label">
-                  <span className="detail-section-number">④</span>
-                  <span>AVAILABLE_MATCHES</span>
-                  <span className="detail-section-line" />
-                </div>
+            {/* RIGHT COLUMN */}
+            <div className="as-col">
 
+              {/* Matches */}
+              <section className="as-panel as-panel-pad" style={{ marginBottom: 20 }}>
+                <div className="as-section-head">Available Matches</div>
                 {matches.length === 0 ? (
-                  <div className="info-box" style={{ fontSize: 13 }}>
-                    No open matches found. An admin can create demo matches with{' '}
-                    <code style={{ color: '#00ff88' }}>scripts/create-matches.ts</code>.
-                  </div>
+                  <div className="as-alert">No open matches found. Run <code>scripts/create-matches.ts</code> to seed demo data.</div>
                 ) : (
-                  <div className="asv-funding-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+                  <div className="as-match-grid">
                     {matches.map(m => {
-                      const selected = matchId === String(m.matchId);
+                      const selectedMatch = matchId === String(m.matchId);
                       return (
                         <div
                           key={m.matchId}
-                          className="asv-funding-cell"
-                          style={{
-                            cursor: 'pointer',
-                            borderColor: selected ? '#00ff88' : undefined,
-                            background: selected ? 'rgba(0,255,136,0.06)' : undefined,
-                          }}
-                          onClick={() => {
-                            setMatchId(String(m.matchId));
-                            setOutcomeIndex('0');
-                            setMinOdds(oddsString(m.homeOdds));
-                            setDeadline(toDateTimeLocal(m.expiration));
-                            setNonce(String(Math.floor(Math.random() * 1e12)));
-                            if (!betAmount) setBetAmount('0.01');
-                          }}
+                          className={`as-match-card ${selectedMatch ? 'selected' : ''}`}
                         >
-                          <div style={{ fontWeight: 600, marginBottom: 8 }}>
-                            {m.home} <span style={{ opacity: 0.4 }}>vs</span> {m.away}
+                          <div className="as-match-teams">
+                            <div className="as-match-team">{m.home}</div>
+                            <div className="as-match-vs">vs</div>
+                            <div className="as-match-team">{m.away}</div>
                           </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, fontSize: 12 }}>
-                            <button
-                              type="button"
-                              className="btn-secondary btn-sm"
-                              style={{ padding: '4px 6px', fontSize: 11 }}
-                              onClick={e => {
-                                e.stopPropagation();
-                                setMatchId(String(m.matchId));
-                                setOutcomeIndex('0');
-                                setMinOdds(oddsString(m.homeOdds));
-                                setDeadline(toDateTimeLocal(m.expiration));
-                                setNonce(String(Math.floor(Math.random() * 1e12)));
-                                if (!betAmount) setBetAmount('0.01');
-                              }}
-                            >
-                              {m.home}<br/>{oddsString(m.homeOdds)}
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-secondary btn-sm"
-                              style={{ padding: '4px 6px', fontSize: 11 }}
-                              onClick={e => {
-                                e.stopPropagation();
-                                setMatchId(String(m.matchId));
-                                setOutcomeIndex('1');
-                                setMinOdds(oddsString(m.drawOdds));
-                                setDeadline(toDateTimeLocal(m.expiration));
-                                setNonce(String(Math.floor(Math.random() * 1e12)));
-                                if (!betAmount) setBetAmount('0.01');
-                              }}
-                            >
-                              Draw<br/>{oddsString(m.drawOdds)}
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-secondary btn-sm"
-                              style={{ padding: '4px 6px', fontSize: 11 }}
-                              onClick={e => {
-                                e.stopPropagation();
-                                setMatchId(String(m.matchId));
-                                setOutcomeIndex('2');
-                                setMinOdds(oddsString(m.awayOdds));
-                                setDeadline(toDateTimeLocal(m.expiration));
-                                setNonce(String(Math.floor(Math.random() * 1e12)));
-                                if (!betAmount) setBetAmount('0.01');
-                              }}
-                            >
-                              {m.away}<br/>{oddsString(m.awayOdds)}
-                            </button>
+                          <div className="as-odds-row">
+                            {[
+                              { label: m.home, odds: m.homeOdds, idx: 0 },
+                              { label: 'Draw', odds: m.drawOdds, idx: 1 },
+                              { label: m.away, odds: m.awayOdds, idx: 2 },
+                            ].map(({ label, odds, idx }) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                className={`as-odds-btn ${selectedMatch && outcomeIndex === String(idx) ? 'active' : ''}`}
+                                onClick={() => selectOutcome(m, idx)}
+                              >
+                                <span className="as-odds-label">{label}</span>
+                                <span className="as-odds-value">{oddsString(odds)}</span>
+                              </button>
+                            ))}
                           </div>
                         </div>
                       );
@@ -556,99 +472,66 @@ export default function AgentSimPage() {
                 )}
               </section>
 
-              {/* ⑤ INIT_DATA */}
-              <section>
-                <div className="detail-section-label">
-                  <span className="detail-section-number">⑤</span>
-                  <span>INIT_DATA</span>
-                  <span className="detail-section-line" />
+              {/* Init Data / Summary */}
+              <section className="as-panel as-panel-pad" style={{ marginBottom: 20 }}>
+                <div className="as-section-head">Bet Request</div>
+
+                <div className="as-summary-row">
+                  <span className="as-summary-key">Match ID</span>
+                  <span className="as-summary-val">{matchId || '—'}</span>
                 </div>
-                <div className="input-group">
-                  <label className="input-label">HEX CALLDATA</label>
-                  <textarea
-                    className="input-field"
-                    rows={3}
-                    placeholder="0x..."
-                    value={initData}
-                    onChange={e => {
-                      const v = e.target.value.trim();
-                      setInitData((v.startsWith('0x') ? v : `0x${v}`) as `0x${string}`);
-                    }}
-                    style={{ width: '100%', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}
-                  />
+                <div className="as-summary-row">
+                  <span className="as-summary-key">Outcome</span>
+                  <span className="as-summary-val">{matchId ? ['Home', 'Draw', 'Away'][Number(outcomeIndex) ?? 0] : '—'}</span>
+                </div>
+                <div className="as-summary-row">
+                  <span className="as-summary-key">Bet Amount</span>
+                  <span className="as-summary-val">{betAmount ? `${betAmount} ETH` : '—'}</span>
+                </div>
+                <div className="as-summary-row">
+                  <span className="as-summary-key">Min Odds</span>
+                  <span className="as-summary-val">{minOdds || '—'}</span>
+                </div>
+                <div className="as-summary-row">
+                  <span className="as-summary-key">Deadline</span>
+                  <span className="as-summary-val">{deadline ? new Date(deadline).toLocaleString() : '—'}</span>
                 </div>
 
-                <div style={{ margin: '16px 0', fontSize: 12, color: 'rgba(255,255,255,0.25)', textAlign: 'center' }}>or build a WorldCup BetRequest</div>
-
-                <div className="asv-funding-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: 12 }}>
-                  <div className="asv-funding-cell">
-                    <span className="asv-funding-label">Match ID</span>
-                    <input className="input-field" type="number" min="0" value={matchId} onChange={e => setMatchId(e.target.value)} />
-                  </div>
-                  <div className="asv-funding-cell">
-                    <span className="asv-funding-label">Outcome</span>
-                    <select className="input-field" value={outcomeIndex} onChange={e => setOutcomeIndex(e.target.value)}>
-                      <option value="0">Home (0)</option>
-                      <option value="1">Draw (1)</option>
-                      <option value="2">Away (2)</option>
-                    </select>
-                  </div>
-                  <div className="asv-funding-cell">
-                    <span className="asv-funding-label">Bet Amount (ETH)</span>
-                    <input className="input-field" type="number" min="0" step="0.001" value={betAmount} onChange={e => setBetAmount(e.target.value)} />
-                  </div>
-                  <div className="asv-funding-cell">
-                    <span className="asv-funding-label">Min Odds (e.g. 1.8)</span>
-                    <input className="input-field" type="number" min="0" step="0.01" value={minOdds} onChange={e => setMinOdds(e.target.value)} />
-                  </div>
-                  <div className="asv-funding-cell">
-                    <span className="asv-funding-label">Deadline</span>
-                    <input className="input-field" type="datetime-local" value={deadline} onChange={e => setDeadline(e.target.value)} />
-                  </div>
-                  <div className="asv-funding-cell">
-                    <span className="asv-funding-label">Nonce</span>
-                    <input className="input-field" type="number" min="0" value={nonce} onChange={e => setNonce(e.target.value)} />
-                  </div>
+                <div style={{ marginTop: 16 }}>
+                  <label className="as-label">Encoded Init Data</label>
+                  <textarea className="as-hex" rows={3} value={initData} onChange={e => setInitData(e.target.value as `0x${string}`)} />
                 </div>
-                <button
-                  type="button"
-                  className="btn-secondary btn-sm"
-                  disabled={!encodedBetRequest || encodedBetRequest === '0x'}
-                  onClick={applyEncodedBet}
-                  style={{ marginBottom: 12 }}
-                >
-                  Apply Encoded BetRequest
-                </button>
               </section>
 
               {/* Execute */}
-              <section>
-                {localError && <div className="info-box error" style={{ marginBottom: 12 }}>{localError}</div>}
-                {state.error && <div className="info-box error" style={{ marginBottom: 12 }}>{(state.error as any)?.shortMessage ?? String(state.error)}</div>}
+              <section className="as-panel as-panel-pad">
+                {localError && <div className="as-alert error" style={{ marginBottom: 16 }}>{localError}</div>}
+                {state.error && <div className="as-alert error" style={{ marginBottom: 16 }}>{(state.error as any)?.shortMessage ?? String(state.error)}</div>}
                 <button
                   type="button"
-                  className="btn-primary btn-full"
+                  className="as-btn-primary"
                   disabled={state.isPending || state.isConfirming}
                   onClick={handleExecute}
                 >
                   {state.isPending || state.isConfirming ? (
-                    <><span className="loading-spinner" /> Submitting…</>
+                    <>Submitting…</>
                   ) : (
                     <>Submit Project →</>
                   )}
                 </button>
-                <div className="agent-footer-note">
-                  submits to InvestmentManager.submitProject(contractAddr, requestedAmount, agentId, initData)
+                <div className="as-mono" style={{ marginTop: 12, fontSize: 11, color: 'var(--as-text-dim)', textAlign: 'center' }}>
+                  InvestmentManager.submitProject(contractAddr, requestedAmount, agentId, initData)
                 </div>
               </section>
 
             </div>
+          </main>
+
+          <div className="as-mono" style={{ marginTop: 40, fontSize: 11, color: 'rgba(255,255,255,0.15)', textAlign: 'center' }}>
+            NFA CONTRACT · {nfaAddress} · ARBITRUM SEPOLIA
           </div>
 
-          <div className="agent-footer-note" style={{ color: 'rgba(255,255,255,0.12)' }}>
-            NFA CONTRACT · {nfaAddress} · arb-sepolia
-          </div>
-        </main>
+        </div>
       </div>
     </>
   );
