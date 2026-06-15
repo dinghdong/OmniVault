@@ -23,6 +23,7 @@ export default function AuditPage() {
           backLabel="Back to Pipeline"
           label="AI Audit Report"
           title={projectId ? `Project #${projectId}` : 'Project'}
+          badge="On-chain Audit"
         />
 
         <main className="detail-page-main">

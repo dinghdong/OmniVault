@@ -535,7 +535,7 @@
 /* ─── Detail pages (audit) ────────────────────────────────────────────────── */
 .neon-theme .detail-page {
   min-height: 100vh;
-  padding-top: 80px;
+  padding-top: 28px;
   background: transparent;
 }
 .neon-theme .detail-page-header {
