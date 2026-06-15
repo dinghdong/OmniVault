@@ -1,15 +1,19 @@
 'use client';
 
 // ─── Contract addresses (Arbitrum Sepolia, chainId 421614) ────────────────────
-export const fundVaultAddress           = (process.env.NEXT_PUBLIC_FUND_VAULT_ADDRESS           || '0x0000000000000000000000000000000000000000') as `0x${string}`;
-export const fundTokenAddress           = (process.env.NEXT_PUBLIC_FUND_TOKEN_ADDRESS           || '0x0000000000000000000000000000000000000000') as `0x${string}`;
-export const investmentManagerAddress   = (process.env.NEXT_PUBLIC_INVESTMENT_MANAGER_ADDRESS   || '0x0000000000000000000000000000000000000000') as `0x${string}`;
-export const omniOracleAddress          = (process.env.NEXT_PUBLIC_OMNI_ORACLE_ADDRESS          || '0x0000000000000000000000000000000000000000') as `0x${string}`;
-export const revenueShareAddress        = (process.env.NEXT_PUBLIC_REVENUE_SHARE_ADDRESS        || '0x0000000000000000000000000000000000000000') as `0x${string}`;
-export const scoringEngineAddress       = (process.env.NEXT_PUBLIC_SCORING_ENGINE_ADDRESS       || '0x0000000000000000000000000000000000000000') as `0x${string}`;
-export const nfaAddress                 = (process.env.NEXT_PUBLIC_NFA_ADDRESS                  || '0x0000000000000000000000000000000000000000') as `0x${string}`;
-export const worldCupAgentVaultAddress  = (process.env.NEXT_PUBLIC_WORLD_CUP_AGENT_VAULT_ADDRESS|| '0x0000000000000000000000000000000000000000') as `0x${string}`;
-export const mockPolyMarketAddress      = (process.env.NEXT_PUBLIC_MOCK_POLY_MARKET_ADDRESS     || '0x0000000000000000000000000000000000000000') as `0x${string}`;
+// Hard-coded fallbacks ensure the deployed app works even if build-time env vars
+// are missing. These are public testnet addresses.
+export const fundVaultAddress           = (process.env.NEXT_PUBLIC_FUND_VAULT_ADDRESS           || '0xF5dE2ffFee85247E9Fa11F4248611F08b3C442ca') as `0x${string}`;
+export const fundTokenAddress           = (process.env.NEXT_PUBLIC_FUND_TOKEN_ADDRESS           || '0x60AEcf4C552390c9b2b963DA61eD688A4E42DF4f') as `0x${string}`;
+export const investmentManagerAddress   = (process.env.NEXT_PUBLIC_INVESTMENT_MANAGER_ADDRESS   || '0x693901C888ae793a05b4Ad26E99A1aEFcA42a97b') as `0x${string}`;
+export const omniOracleAddress          = (process.env.NEXT_PUBLIC_OMNI_ORACLE_ADDRESS          || '0x7c199d9cc7a634127f459dBdd9091F93f15166dD') as `0x${string}`;
+export const revenueShareAddress        = (process.env.NEXT_PUBLIC_REVENUE_SHARE_ADDRESS        || '0x91c7005bcC2fdF066D02eB12d3D8a2fdC9769d53') as `0x${string}`;
+export const scoringEngineAddress       = (process.env.NEXT_PUBLIC_SCORING_ENGINE_ADDRESS       || '0xeb07843c0423208a087460bcc1ee6ec9de8d6566') as `0x${string}`;
+export const nfaAddress                 = (process.env.NEXT_PUBLIC_NFA_ADDRESS                  || '0xfbc638E280F51d3A4A590D073160E882ea14D837') as `0x${string}`;
+export const worldCupAgentVaultAddress  = (process.env.NEXT_PUBLIC_WORLD_CUP_AGENT_VAULT_ADDRESS|| '0xc8b990A0673097b61919CCfDA69aE1482BD0464C') as `0x${string}`;
+export const mockPolyMarketAddress      = (process.env.NEXT_PUBLIC_MOCK_POLY_MARKET_ADDRESS     || '0xde4F4572A18A80A83311CdB041BC86b8519B7722') as `0x${string}`;
+export const auditTrailAddress          = (process.env.NEXT_PUBLIC_AUDIT_TRAIL_ADDRESS          || '0x2A4deC60147916152A871B28E5C3D63512Fa1135') as `0x${string}`;
+export const computeTrailAddress        = (process.env.NEXT_PUBLIC_COMPUTE_TRAIL_ADDRESS        || '0xAd7c04F184773CdFb41874DEF2840357BCE4E770') as `0x${string}`;
 export const explorerUrl                =  process.env.NEXT_PUBLIC_EXPLORER_URL                 || 'https://sepolia.arbiscan.io';
 
 // Chain ID (421614 = Arbitrum Sepolia)
