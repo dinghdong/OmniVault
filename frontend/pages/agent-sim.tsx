@@ -195,7 +195,7 @@ export default function AgentSimPage() {
       };
     })
     .filter((m): m is MatchItem =>
-      m !== null && m.status === 0 && m.expiration > nowSec
+      m !== null && (m.status === 0 || m.status === 0n) && m.expiration > nowSec
     );
 
   // Deduplicate by home/away pair, keep the latest matchId
