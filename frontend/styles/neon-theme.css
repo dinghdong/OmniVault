@@ -44,9 +44,10 @@
 /* ─── Top bar ─────────────────────────────────────────────────────────────── */
 .neon-theme .page-header {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 24px;
+  width: 100%;
   max-width: 1200px;
   margin: 0 auto;
   padding: 28px 24px;
@@ -585,7 +586,7 @@
 .neon-theme .detail-page-main {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 28px 24px 80px;
+  padding: 28px 0 80px;
 }
 @media (max-width: 640px) {
   .neon-theme .detail-page-header {
