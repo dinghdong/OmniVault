@@ -1,13 +1,15 @@
 /**
  * deploy-arb-sepolia.ts
  *
- * One-shot deployment to Arbitrum Sepolia (v2 — AAVE-free, A2A AI Agents):
- *   1. FundToken  → FundVault (ETH-only, no AAVE)
- *   2. InvestmentManager (AI Agent reform — agentDid/agentRepo/agentApiEndpoint)
- *   3. MockOmniOracleV2 (3D scores — demo oracle, no Chainlink subscription needed)
- *   4. RevenueShare (MasterChef-style per-agent revenue distribution)
- *   5. Wire roles + set oracle
- *   6. Write updated frontend/.env.local
+ * One-shot deployment to Arbitrum Sepolia for the A2A World Cup demo:
+ *   1. FundToken → FundVault (ETH-only)
+ *   2. NonFungibleAgent (NFA identities)
+ *   3. InvestmentManager (A2A funding gateway)
+ *   4. MockOmniOracleV2 (3D demo oracle)
+ *   5. MockPolyMarket (simulated prediction market)
+ *   6. WorldCupAgentVault (domain-specific agent vault)
+ *   7. Wire roles, create a demo match, seed liquidity
+ *   8. Write updated frontend/.env.local
  *
  * Usage:
  *   npx hardhat run scripts/deploy-arb-sepolia.ts --network arbitrumSepolia
@@ -17,6 +19,7 @@ import { writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 const SCORE_THRESHOLD = 60; // min score to approve investment
+const DEMO_AGENT_SHARE_BPS = 3000; // 30% profit share to agent
 
 async function waitTx(tx: any, label: string) {
   const receipt = await tx.wait();
@@ -44,7 +47,7 @@ async function main() {
 
   const bal = await provider.getBalance(signer.address);
   console.log('═══════════════════════════════════════════════════════');
-  console.log('OmniVault v2  ·  Arbitrum Sepolia Deployment');
+  console.log('OmniVault A2A · Arbitrum Sepolia Deployment');
   console.log('═══════════════════════════════════════════════════════');
   console.log('Deployer:', signer.address);
   console.log('ETH balance:', ethers.formatEther(bal), 'ETH');
@@ -57,51 +60,48 @@ async function main() {
   const fundToken = await deploy(FundToken, 'FundToken');
 
   const FundVault = await ethers.getContractFactory('FundVault');
-  const fundVault = await deploy(FundVault, 'FundVault',
-    await fundToken.getAddress()        // new: no WETH/AAVE args
-  );
+  const fundVault = await deploy(FundVault, 'FundVault', await fundToken.getAddress());
 
-  // ── 2. InvestmentManager (AI Agent reform) ────────────────────────────────
-  console.log('\n2. InvestmentManager (AI Agent reform)');
-
-  const IM = await ethers.getContractFactory('InvestmentManager');
-  const im = await deploy(IM, 'InvestmentManager',
-    await fundVault.getAddress(),
-    SCORE_THRESHOLD                     // new: no WETH arg
-  );
-
-  // ── 3. MockOmniOracleV2 (3D scores — demo oracle) ─────────────────────────
-  // We deploy the mock oracle for demo purposes.
-  // Task #9 (Chainlink ToS) is skipped; the real OmniOracle can replace this
-  // later by calling im.setOracle(realOracleAddress).
-  console.log('\n3. MockOmniOracleV2 (3D scores demo oracle)');
-
-  const MockOracle = await ethers.getContractFactory('MockOmniOracleV2');
-  const oracle = await deploy(MockOracle, 'MockOmniOracleV2');
-
-  // ── 4. RevenueShare (MasterChef-style per-agent distribution) ─────────────
-  console.log('\n4. RevenueShare');
-
-  const RS = await ethers.getContractFactory('RevenueShare');
-  const revenueShare = await deploy(RS, 'RevenueShare');
-
-  // ── 4b. NonFungibleAgent (on-chain AI agent identity) ─────────────────────
-  console.log('\n4b. NonFungibleAgent (NFA)');
+  // ── 2. NonFungibleAgent (NFA) ─────────────────────────────────────────────
+  console.log('\n2. NonFungibleAgent (NFA)');
 
   const NFA = await ethers.getContractFactory('NonFungibleAgent');
   const nfa = await deploy(NFA, 'NonFungibleAgent');
 
-  // Mint the deployer's demo agent identity (Agent #1)
-  const mintTx = await nfa.mint(
-    'github.com/dinghdong/OmniVault',
-    'https://api.omnivault-demo.ai/v1/audit',
-    'claude-sonnet-4-6',
-  );
-  await mintTx.wait();
-  console.log(`  ✓ Agent #1 minted to deployer (did: ${await nfa.getDid(1)})`);
+  // ── 3. InvestmentManager (A2A funding gateway) ─────────────────────────────
+  console.log('\n3. InvestmentManager (A2A funding gateway)');
 
-  // ── 5. Wire roles ─────────────────────────────────────────────────────────
-  console.log('\n5. Wiring roles');
+  const IM = await ethers.getContractFactory('InvestmentManager');
+  const im = await deploy(IM, 'InvestmentManager',
+    await fundVault.getAddress(),
+    await nfa.getAddress(),
+    SCORE_THRESHOLD
+  );
+
+  // ── 4. MockOmniOracleV2 (3D scores demo oracle) ────────────────────────────
+  console.log('\n4. MockOmniOracleV2 (3D scores demo oracle)');
+
+  const MockOracle = await ethers.getContractFactory('MockOmniOracleV2');
+  const oracle = await deploy(MockOracle, 'MockOmniOracleV2');
+
+  // ── 5. MockPolyMarket (simulated prediction market) ────────────────────────
+  console.log('\n5. MockPolyMarket');
+
+  const Market = await ethers.getContractFactory('MockPolyMarket');
+  const market = await deploy(Market, 'MockPolyMarket');
+
+  // ── 6. WorldCupAgentVault (domain-specific vault) ──────────────────────────
+  console.log('\n6. WorldCupAgentVault');
+
+  const Vault = await ethers.getContractFactory('WorldCupAgentVault');
+  const vault = await deploy(Vault, 'WorldCupAgentVault',
+    await im.getAddress(),
+    await nfa.getAddress(),
+    await market.getAddress()
+  );
+
+  // ── 7. Wire roles & configure contracts ────────────────────────────────────
+  console.log('\n7. Wiring roles & configuration');
 
   // FundToken: grant MINTER + BURNER to FundVault
   await waitTx(
@@ -125,34 +125,61 @@ async function main() {
     'InvestmentManager.setOracle → MockOmniOracleV2'
   );
 
-  // InvestmentManager: grant AI_ORACLE_ROLE to deployer (for settleAudit in demo)
-  await waitTx(
-    await im.grantRole(await im.AI_ORACLE_ROLE(), signer.address),
-    'InvestmentManager.AI_ORACLE_ROLE → deployer'
-  );
-
-  // InvestmentManager: grant RISK_AGENT_ROLE to deployer (for veto in demo)
+  // InvestmentManager: grant RISK_AGENT_ROLE to deployer (veto demo)
   await waitTx(
     await im.grantRole(await im.RISK_AGENT_ROLE(), signer.address),
     'InvestmentManager.RISK_AGENT_ROLE → deployer'
   );
 
-  // ── 6. Update frontend/.env.local ─────────────────────────────────────────
-  console.log('\n6. Updating frontend/.env.local');
+  // WorldCupAgentVault: optionally set default profit share to 30%
+  // (left at default 3000 bps in contract; setAgentShare is per-order and owner-only)
+
+  // ── 8. Seed liquidity & create demo match ──────────────────────────────────
+  console.log('\n8. Seed liquidity & demo match');
+
+  // Seed FundVault with ETH so it can fund agent bets
+  await waitTx(
+    await fundVault.deposit({ value: ethers.parseEther('0.02') }),
+    'Deposit 0.02 ETH into FundVault'
+  );
+
+  // Seed MockPolyMarket with ETH so it can pay out winning odds
+  await waitTx(
+    await signer.sendTransaction({ to: await market.getAddress(), value: ethers.parseEther('0.02') }),
+    'Seed 0.02 ETH into MockPolyMarket'
+  );
+
+  // Create a demo World Cup match
+  const now = Math.floor(Date.now() / 1000);
+  const expiration = now + 7 * 24 * 60 * 60; // 1 week
+  await waitTx(
+    await market.createMatch(
+      'Argentina',
+      'Brazil',
+      ethers.parseEther('2.3'),   // home odds
+      ethers.parseEther('3.2'),   // draw odds
+      ethers.parseEther('3.1'),   // away odds
+      expiration
+    ),
+    'Create demo match #1 Argentina vs Brazil'
+  );
+
+  // ── 9. Update frontend/.env.local ──────────────────────────────────────────
+  console.log('\n9. Updating frontend/.env.local');
 
   const addresses = {
     fundToken:     await fundToken.getAddress(),
     fundVault:     await fundVault.getAddress(),
     im:            await im.getAddress(),
     oracle:        await oracle.getAddress(),
-    revenueShare:  await revenueShare.getAddress(),
     nfa:           await nfa.getAddress(),
+    market:        await market.getAddress(),
+    vault:         await vault.getAddress(),
   };
 
   const envPath = join(__dirname, '../frontend/.env.local');
   let envContent = readFileSync(envPath, 'utf-8');
 
-  // Helper: replace or append a line
   function setEnvVar(content: string, key: string, value: string): string {
     const pattern = new RegExp(`^${key}=.*`, 'm');
     if (pattern.test(content)) {
@@ -162,13 +189,14 @@ async function main() {
   }
 
   envContent = setEnvVar(envContent, 'NEXT_PUBLIC_CHAIN_ID',                    '421614');
-  envContent = setEnvVar(envContent, 'NEXT_PUBLIC_EXPLORER_URL',                 'https://sepolia.arbiscan.io');
-  envContent = setEnvVar(envContent, 'NEXT_PUBLIC_FUND_TOKEN_ADDRESS',            addresses.fundToken);
-  envContent = setEnvVar(envContent, 'NEXT_PUBLIC_FUND_VAULT_ADDRESS',            addresses.fundVault);
-  envContent = setEnvVar(envContent, 'NEXT_PUBLIC_INVESTMENT_MANAGER_ADDRESS',    addresses.im);
-  envContent = setEnvVar(envContent, 'NEXT_PUBLIC_OMNI_ORACLE_ADDRESS',           addresses.oracle);
-  envContent = setEnvVar(envContent, 'NEXT_PUBLIC_REVENUE_SHARE_ADDRESS',         addresses.revenueShare);
-  envContent = setEnvVar(envContent, 'NEXT_PUBLIC_NFA_ADDRESS',                    addresses.nfa);
+  envContent = setEnvVar(envContent, 'NEXT_PUBLIC_EXPLORER_URL',                'https://sepolia.arbiscan.io');
+  envContent = setEnvVar(envContent, 'NEXT_PUBLIC_FUND_TOKEN_ADDRESS',          addresses.fundToken);
+  envContent = setEnvVar(envContent, 'NEXT_PUBLIC_FUND_VAULT_ADDRESS',          addresses.fundVault);
+  envContent = setEnvVar(envContent, 'NEXT_PUBLIC_INVESTMENT_MANAGER_ADDRESS',  addresses.im);
+  envContent = setEnvVar(envContent, 'NEXT_PUBLIC_OMNI_ORACLE_ADDRESS',         addresses.oracle);
+  envContent = setEnvVar(envContent, 'NEXT_PUBLIC_NFA_ADDRESS',                 addresses.nfa);
+  envContent = setEnvVar(envContent, 'NEXT_PUBLIC_WORLD_CUP_AGENT_VAULT_ADDRESS', addresses.vault);
+  envContent = setEnvVar(envContent, 'NEXT_PUBLIC_MOCK_POLY_MARKET_ADDRESS',    addresses.market);
 
   writeFileSync(envPath, envContent);
   console.log('  ✓ frontend/.env.local updated');
@@ -177,20 +205,22 @@ async function main() {
   console.log('\n═══════════════════════════════════════════════════════');
   console.log('✅  Deployment complete!');
   console.log('');
-  console.log('FundToken:         ', addresses.fundToken);
-  console.log('FundVault:         ', addresses.fundVault);
-  console.log('InvestmentManager: ', addresses.im);
-  console.log('MockOmniOracleV2:  ', addresses.oracle);
-  console.log('RevenueShare:      ', addresses.revenueShare);
-  console.log('NonFungibleAgent:  ', addresses.nfa);
-  console.log('ScoringEngine:      0xeb07843c0423208a087460bcc1ee6ec9de8d6566 (Stylus, deployed)');
+  console.log('FundToken:              ', addresses.fundToken);
+  console.log('FundVault:              ', addresses.fundVault);
+  console.log('InvestmentManager:      ', addresses.im);
+  console.log('MockOmniOracleV2:       ', addresses.oracle);
+  console.log('NonFungibleAgent:       ', addresses.nfa);
+  console.log('MockPolyMarket:         ', addresses.market);
+  console.log('WorldCupAgentVault:     ', addresses.vault);
+  console.log('');
+  console.log('Demo match #1: Argentina vs Brazil (expires', expiration, ')');
   console.log('');
   console.log('frontend/.env.local updated for Arbitrum Sepolia (chainId 421614)');
   console.log('═══════════════════════════════════════════════════════');
   console.log('');
   console.log('Next steps:');
-  console.log('  cd frontend && npm run dev   ← verify the UI');
-  console.log('  node chainlink/test-audit-source.js   ← verify audit-source.js');
+  console.log('  cd frontend && npm run dev');
+  console.log('  cd agents/worldcup-prediction-agent && npm run autonomous');
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

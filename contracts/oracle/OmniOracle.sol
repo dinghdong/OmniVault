@@ -165,15 +165,9 @@ contract OmniOracle is FunctionsClient, ConfirmedOwner {
 
     /// @notice Request an AI audit for a project via Chainlink Functions.
     ///         Callable only by the linked InvestmentManager.
-    /// @param projectId       Project ID in InvestmentManager
-    /// @param sourceCodeHash  Hex string of the project's commit hash (keccak256 of pitch/code)
-    /// @param bizApi          Business context URL / description passed as prompt context
-    /// @return requestId      Chainlink Functions request ID
-    function requestAudit(
-        uint256 projectId,
-        string  calldata sourceCodeHash,
-        string  calldata bizApi
-    ) external returns (bytes32 requestId) {
+    /// @param projectId Project ID in InvestmentManager
+    /// @return requestId Chainlink Functions request ID
+    function requestAudit(uint256 projectId) external returns (bytes32 requestId) {
         if (msg.sender != investmentManager) revert NotAuthorized();
         if (bytes(s_auditSource).length == 0) revert EmptySource();
         if (s_pendingRequest[projectId] != bytes32(0)) revert AuditAlreadyPending(projectId);
@@ -182,11 +176,9 @@ contract OmniOracle is FunctionsClient, ConfirmedOwner {
         FunctionsRequest.Request memory req;
         req.initializeRequestForInlineJavaScript(s_auditSource);
 
-        // Pass project data as args (available as `args[]` in the JS source)
-        string[] memory fArgs = new string[](3);
+        // Pass only projectId; JS source reads agentId and NFA metadata from InvestmentManager.
+        string[] memory fArgs = new string[](1);
         fArgs[0] = _uint256ToString(projectId);
-        fArgs[1] = sourceCodeHash;
-        fArgs[2] = bizApi;
         req.setArgs(fArgs);
 
         // Attach DON-hosted secrets (ZG_API_KEY + ZG_BASE_URL)
@@ -205,7 +197,7 @@ contract OmniOracle is FunctionsClient, ConfirmedOwner {
         s_requestToProject[requestId]  = projectId;
         s_pendingRequest[projectId]    = requestId;
 
-        emit AuditRequested(projectId, requestId, sourceCodeHash);
+        emit AuditRequested(projectId, requestId, "");
     }
 
     // ─── Chainlink Callback ─────────────────────────────────────────────────────

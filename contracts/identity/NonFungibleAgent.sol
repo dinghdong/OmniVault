@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import { ERC721 } from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import { INonFungibleAgent } from "../interfaces/INonFungibleAgent.sol";
 
 /**
  * @title  NonFungibleAgent (NFA)
@@ -16,19 +17,12 @@ import { ERC721 } from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
  *
  * @dev    ERC-721 with on-chain metadata (no tokenURI / IPFS required).
  */
-contract NonFungibleAgent is ERC721 {
+contract NonFungibleAgent is ERC721, INonFungibleAgent {
     // ── Structs ───────────────────────────────────────────────────────────────
-
-    struct AgentMeta {
-        string repo;          // Source code repo, e.g. "github.com/org/agent"
-        string apiEndpoint;   // A2A REST endpoint, e.g. "https://api.agent.ai/v1"
-        string model;         // AI model, e.g. "claude-sonnet-4-6" / "deepseek-v3"
-        uint256 mintedAt;     // Block timestamp at mint
-    }
 
     // ── State ─────────────────────────────────────────────────────────────────
 
-    mapping(uint256 => AgentMeta) private _agents;
+    mapping(uint256 => INonFungibleAgent.AgentMeta) private _agents;
     uint256 private _nextId;
 
     // ── Events ────────────────────────────────────────────────────────────────
@@ -38,7 +32,8 @@ contract NonFungibleAgent is ERC721 {
         address indexed owner,
         string  did,
         string  repo,
-        string  model
+        string  model,
+        bytes32 teeMrenclave
     );
 
     // ── Constructor ───────────────────────────────────────────────────────────
@@ -49,34 +44,55 @@ contract NonFungibleAgent is ERC721 {
 
     /**
      * @notice Mint a new agent identity NFT to the caller.
-     * @param  repo        Source code repository URL (stored on-chain)
-     * @param  apiEndpoint REST/gRPC endpoint for A2A calls
-     * @param  model       AI model identifier string
-     * @return tokenId     Newly minted token ID (starts at 1)
+     * @param  repo          Source code repository URL (stored on-chain)
+     * @param  apiEndpoint   REST/gRPC endpoint for A2A calls
+     * @param  model         AI model identifier string
+     * @param  teeMrenclave  Expected TEE enclave measurement hash
+     * @param  teePublicKey  Public key whose private key lives in the TEE
+     * @return tokenId       Newly minted token ID (starts at 1)
      */
     function mint(
         string calldata repo,
         string calldata apiEndpoint,
-        string calldata model
+        string calldata model,
+        bytes32 teeMrenclave,
+        bytes   calldata teePublicKey
     ) external returns (uint256 tokenId) {
         tokenId = ++_nextId;
         _safeMint(msg.sender, tokenId);
         _agents[tokenId] = AgentMeta({
-            repo:        repo,
-            apiEndpoint: apiEndpoint,
-            model:       model,
-            mintedAt:    block.timestamp
+            repo:         repo,
+            apiEndpoint:  apiEndpoint,
+            model:        model,
+            teeMrenclave: teeMrenclave,
+            teePublicKey: teePublicKey,
+            mintedAt:     block.timestamp
         });
-        emit AgentMinted(tokenId, msg.sender, getDid(tokenId), repo, model);
+        emit AgentMinted(tokenId, msg.sender, getDid(tokenId), repo, model, teeMrenclave);
     }
 
     /**
      * @notice Return the stored metadata for `tokenId`.
      * @dev    Reverts if token does not exist.
      */
-    function getAgent(uint256 tokenId) external view returns (AgentMeta memory) {
+    function getAgent(uint256 tokenId)
+        external
+        view
+        override
+        returns (INonFungibleAgent.AgentMeta memory)
+    {
         _requireOwned(tokenId);
         return _agents[tokenId];
+    }
+
+    /// @notice ERC-721 ownerOf exposed through the INonFungibleAgent interface.
+    function ownerOf(uint256 tokenId)
+        public
+        view
+        override(ERC721, INonFungibleAgent)
+        returns (address)
+    {
+        return super.ownerOf(tokenId);
     }
 
     /**

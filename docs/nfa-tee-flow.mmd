@@ -1,0 +1,43 @@
+flowchart TB
+    subgraph OffChain["Agent Operator / Cloud"]
+        A[("AI Agent 程序\n策略代码 + 模型")]
+        B[("TEE Enclave\n保险箱")]
+        A -->|加载到| B
+        B -->|生成| C["Attestation Quote\n(MRENCLAVE + 公钥 + 签名)"]
+        B -->|生成| K["签名密钥对\n私钥只存在 enclave 内"]
+    end
+
+    subgraph OnChain["区块链"]
+        D[("Non-Fungible Agent\nNFA 合约")]
+        E["NFA 元数据\nteeMrenclave + teePublicKey\nrepo / apiEndpoint / model"]
+        D --> E
+
+        F["OmniVault\nInvestmentManager"]
+        G["WorldCupAgentVault"]
+        H["MockPolyMarket"]
+
+        F -->|审核通过后拨款| G
+        G -->|placeBet| H
+    end
+
+    subgraph OracleLayer["链外验证 / AI 审计"]
+        I["Chainlink Functions / 0G Compute"]
+        J["Intel Attestation Service"]
+        I -->|验证 quote 真伪| J
+    end
+
+    A -->|1. 运行策略| B
+    B -->|2. mint NFA 时登记| D
+    E -.->|3. 提交项目时比对| I
+    C -->|3.1 提交新鲜 quote| I
+    I -->|4. 返回验证结果| F
+    F -->|5. Agent 签名 ExecutionRequest| F
+    F -->|6. executeProject| G
+    G -->|7. settleBetOrder| H
+    H -->|8. 返回本金+盈利| G
+    G -->|9. 按比例分给| F
+    F -->|10. 分给| A
+
+    style OffChain fill:#0f172a,stroke:#38bdf8,color:#fff
+    style OnChain fill:#0f172a,stroke:#00ff88,color:#fff
+    style OracleLayer fill:#0f172a,stroke:#f2cc60,color:#fff

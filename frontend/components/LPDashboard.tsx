@@ -56,9 +56,8 @@ const STATUS_COLOR: Record<string, string> = {
   Auditing:         '#63b3ed',
   PendingExecution: '#a78bfa',
   Rejected:         '#f87171',
+  Settled:          '#8b949e',
   Vetoed:           '#f87171',
-  Exited:           '#8b949e',
-  WriteOff:         '#f87171',
   CircuitBroken:    '#f97316',
 };
 
@@ -128,14 +127,14 @@ export default function LPDashboard() {
   // User ETH value
   const userEth = userBalance ? parseFloat(formatEther(userBalance)) : 0;
 
-  // Active / troubled / exited projects
-  const active    = projects.filter(p => p.statusNum === 5);
-  const troubled  = projects.filter(p => [6, 8, 9].includes(p.statusNum));
-  const exited    = projects.filter(p => p.statusNum === 7);
-  const totalInvested      = active.reduce((acc, p) => acc + Number(formatEther(p.investmentAmount)), 0);
-  const totalExitInvested  = exited.reduce((acc, p) => acc + Number(formatEther(p.investmentAmount)), 0);
-  const totalExitReturns   = exited.reduce((acc, p) => acc + Number(formatEther(p.exitProceeds)),    0);
-  const portfolioRoi       = totalExitInvested > 0 ? (totalExitReturns / totalExitInvested * 100 - 100) : 0;
+  // Active / troubled / settled projects
+  const active    = projects.filter(p => p.statusNum === 4);
+  const troubled  = projects.filter(p => [6, 7].includes(p.statusNum));
+  const settled   = projects.filter(p => p.statusNum === 5);
+  const totalInvested      = active.reduce((acc, p) => acc + Number(formatEther(p.fundedAmount)), 0);
+  const totalSettledInvested  = settled.reduce((acc, p) => acc + Number(formatEther(p.fundedAmount)), 0);
+  const totalSettledReturns   = settled.reduce((acc, p) => acc + Number(formatEther(p.returnedAmount)),    0);
+  const portfolioRoi       = totalSettledInvested > 0 ? (totalSettledReturns / totalSettledInvested * 100 - 100) : 0;
 
   const isLoading = statsLoading || projectsLoading;
 
@@ -173,7 +172,7 @@ export default function LPDashboard() {
           <div className="lp-card-value" style={{ color: troubled.length > 0 ? '#f97316' : '#00ff88' }}>
             {troubled.length}
           </div>
-          <div className="lp-card-sub">{troubled.length > 0 ? 'circuit breaks / write-offs' : 'No active alerts'}</div>
+          <div className="lp-card-sub">{troubled.length > 0 ? 'circuit breaks / vetoes' : 'No active alerts'}</div>
         </div>
       </div>
 
@@ -207,25 +206,25 @@ export default function LPDashboard() {
               <span className="lp-alert-status" style={{ color: STATUS_COLOR[PROJECT_STATUS[p.statusNum]] ?? '#f87171' }}>
                 {PROJECT_STATUS[p.statusNum]}
               </span>
-              <span className="lp-alert-amt">{parseFloat(formatEther(p.investmentAmount)).toFixed(4)} ETH at risk</span>
+              <span className="lp-alert-amt">{parseFloat(formatEther(p.fundedAmount)).toFixed(4)} ETH at risk</span>
             </div>
           ))}
         </div>
       )}
 
-      {/* Exited investments P&L */}
-      {exited.length > 0 && (
+      {/* Settled investments P&L */}
+      {settled.length > 0 && (
         <div className="lp-alerts">
-          <div className="lp-section-title" style={{ color: '#8b949e' }}>→ Exited Investments ({exited.length})</div>
+          <div className="lp-section-title" style={{ color: '#8b949e' }}>→ Settled Investments ({settled.length})</div>
           <div className="lp-stats-grid" style={{ marginBottom: 10 }}>
             <div className="lp-card">
               <div className="lp-card-label">Capital Deployed</div>
-              <div className="lp-card-value">{totalExitInvested.toFixed(4)} ETH</div>
+              <div className="lp-card-value">{totalSettledInvested.toFixed(4)} ETH</div>
             </div>
             <div className="lp-card">
               <div className="lp-card-label">Total Returns</div>
-              <div className="lp-card-value" style={{ color: totalExitReturns >= totalExitInvested ? '#00ff88' : '#f87171' }}>
-                {totalExitReturns.toFixed(4)} ETH
+              <div className="lp-card-value" style={{ color: totalSettledReturns >= totalSettledInvested ? '#00ff88' : '#f87171' }}>
+                {totalSettledReturns.toFixed(4)} ETH
               </div>
             </div>
             <div className="lp-card">
@@ -235,14 +234,14 @@ export default function LPDashboard() {
               </div>
             </div>
           </div>
-          {exited.map(p => (
+          {settled.map(p => (
             <div key={p.projectId} className="lp-alert-row">
               <span className="lp-alert-id">Project #{p.projectId}</span>
-              <span className="lp-alert-status" style={{ color: '#8b949e' }}>Exited</span>
+              <span className="lp-alert-status" style={{ color: '#8b949e' }}>Settled</span>
               <span className="lp-alert-amt">
-                {parseFloat(formatEther(p.investmentAmount)).toFixed(4)} ETH →{' '}
-                <span style={{ color: p.exitProceeds >= p.investmentAmount ? '#00ff88' : '#f87171' }}>
-                  {parseFloat(formatEther(p.exitProceeds)).toFixed(4)} ETH
+                {parseFloat(formatEther(p.fundedAmount)).toFixed(4)} ETH →{' '}
+                <span style={{ color: p.returnedAmount >= p.fundedAmount ? '#00ff88' : '#f87171' }}>
+                  {parseFloat(formatEther(p.returnedAmount)).toFixed(4)} ETH
                 </span>
               </span>
             </div>

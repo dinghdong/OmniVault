@@ -1,10 +1,16 @@
 'use client';
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useAccount, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { formatEther } from 'viem';
-import { nfaAddress, nfaAbi, fundVaultAddress, fundVaultAbi, investmentManagerAddress, investmentManagerAbi, contractChainId } from '../hooks/contracts';
+import { formatEther, parseEther, encodeAbiParameters } from 'viem';
+import {
+  nfaAddress, nfaAbi,
+  fundVaultAddress, fundVaultAbi,
+  investmentManagerAddress, investmentManagerAbi,
+  contractChainId,
+  worldCupAgentVaultAddress,
+} from '../hooks/contracts';
 import { useProjectSubmit } from '../hooks/useProjectSubmit';
 
 /* ─── Geometric pixel avatar from token ID ───────────────────────────────── */
@@ -26,56 +32,41 @@ function AgentAvatar({ id, color, size = 34 }: { id: number; color: string; size
   );
 }
 
-/* ─── Live calldata preview ──────────────────────────────────────────────── */
-function CalldataPreview({ commitHash, contractAddr, bizApi, amount, agentDid, agentRepo, agentEndpoint, imAddr }: {
-  commitHash: string; contractAddr: string; bizApi: string; amount: string;
-  agentDid: string; agentRepo: string; agentEndpoint: string; imAddr: string;
-}) {
-  const C = { fn: '#00ff88', param: '#8b949e', filled: '#e6edf3', empty: '#f87171', paren: '#6e7681', str: '#a5d6ff', num: '#f2cc60', comment: '#3d444d', arrow: '#63b3ed' };
-  type VType = 'bytes32' | 'addr' | 'str' | 'num';
-  const V = (v: string, type: VType, note?: string) => {
-    const empty = !v || v === '0x' || v === '0';
-    const color = empty ? C.empty : type === 'str' ? C.str : type === 'num' ? C.num : C.filled;
-    const display = empty ? (type === 'addr' ? '0x__________' : type === 'bytes32' ? '0x______________' : '""') : (type === 'str' ? `"${v}"` : v);
-    return <span><span style={{ color }}>{display}</span>{note && <span style={{ color: C.arrow, marginLeft: 8, fontSize: 10 }}>← {note}</span>}</span>;
-  };
-  const shortAddr = (a: string) => a ? `${a.slice(0, 8)}…${a.slice(-6)}` : '';
-  return (
-    <pre className="agent-preview">
-      <span style={{ color: C.comment }}>{`// InvestmentManager · ${shortAddr(imAddr)}`}</span>{'\n'}
-      <span style={{ color: C.fn }}>im</span><span style={{ color: C.paren }}>.</span><span style={{ color: C.fn }}>submitProject</span><span style={{ color: C.paren }}>{'('}</span>{'\n'}
-      {'  '}<span style={{ color: C.param }}>commitHash      </span><span style={{ color: C.paren }}>: </span>{V(commitHash, 'bytes32', commitHash ? 'sha256 of file' : 'required')},{'\n'}
-      {'  '}<span style={{ color: C.param }}>contractAddr    </span><span style={{ color: C.paren }}>: </span>{V(contractAddr, 'addr', !contractAddr ? 'required' : '')},{'\n'}
-      {'  '}<span style={{ color: C.param }}>bizApi          </span><span style={{ color: C.paren }}>: </span>{V(bizApi, 'str')},{'\n'}
-      {'  '}<span style={{ color: C.param }}>requestedAmount </span><span style={{ color: C.paren }}>: </span>{V(amount ? `${amount} ether` : '', 'num', !amount ? 'required' : '')},{'\n'}
-      {'  '}<span style={{ color: C.param }}>agentDid        </span><span style={{ color: C.paren }}>: </span>{V(agentDid, 'str', agentDid ? 'from NFA ✓' : 'select NFA')},{'\n'}
-      {'  '}<span style={{ color: C.param }}>agentRepo       </span><span style={{ color: C.paren }}>: </span>{V(agentRepo, 'str', agentRepo ? 'from NFA ✓' : '')},{'\n'}
-      {'  '}<span style={{ color: C.param }}>agentApiEndpoint</span><span style={{ color: C.paren }}>: </span>{V(agentEndpoint, 'str', agentEndpoint ? 'from NFA ✓' : '')}{'\n'}
-      <span style={{ color: C.paren }}>{')'}</span>
-    </pre>
-  );
-}
-
 const AGENT_COLORS = ['#00ff88', '#63b3ed', '#a78bfa', '#f97316', '#f2cc60'];
+
+const BET_REQUEST_TYPES = [
+  { name: 'matchId', type: 'uint256' },
+  { name: 'outcomeIndex', type: 'uint256' },
+  { name: 'betAmount', type: 'uint256' },
+  { name: 'minOdds', type: 'uint256' },
+  { name: 'deadline', type: 'uint256' },
+  { name: 'nonce', type: 'uint256' },
+] as const;
 
 /* ─── Main page ──────────────────────────────────────────────────────────── */
 export default function AgentSimPage() {
   const { address } = useAccount();
   const { submit, state, reset: resetSubmit } = useProjectSubmit();
 
-  const [selectedId, setSelectedId]   = useState<number | null>(null);
-  const [contractAddr, setContractAddr] = useState('');
-  const [commitHash, setCommitHash]   = useState('');
-  const [hashLabel, setHashLabel]     = useState('');
-  const [bizApi, setBizApi]           = useState('');
-  const [amount, setAmount]           = useState('');
-  const [dragging, setDragging]       = useState(false);
-  const [localError, setLocalError]   = useState('');
+  const [selectedId, setSelectedId]     = useState<number | null>(null);
+  const [contractAddr, setContractAddr] = useState(worldCupAgentVaultAddress);
+  const [amount, setAmount]             = useState('');
+  const [initData, setInitData]         = useState<`0x${string}`>('0x');
+  const [localError, setLocalError]     = useState('');
   const [showMintForm, setShowMintForm] = useState(false);
-  const [mintRepo, setMintRepo]       = useState('');
-  const [mintApi, setMintApi]         = useState('');
-  const [mintModel, setMintModel]     = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [mintRepo, setMintRepo]         = useState('');
+  const [mintApi, setMintApi]           = useState('');
+  const [mintModel, setMintModel]       = useState('');
+  const [mintMrenclave, setMintMrenclave] = useState('');
+  const [mintPubKey, setMintPubKey]     = useState('');
+
+  // BetRequest builder state
+  const [matchId, setMatchId]           = useState('');
+  const [outcomeIndex, setOutcomeIndex] = useState('0');
+  const [betAmount, setBetAmount]       = useState('');
+  const [minOdds, setMinOdds]           = useState('');
+  const [deadline, setDeadline]         = useState('');
+  const [nonce, setNonce]               = useState('0');
 
   // ── Mint NFA ───────────────────────────────────────────────────────────────
   const {
@@ -94,16 +85,20 @@ export default function AgentSimPage() {
     if (!mintRepo.trim()) { setLocalError('Agent repo is required'); return; }
     if (!mintApi.trim()) { setLocalError('API endpoint is required'); return; }
     if (!mintModel.trim()) { setLocalError('Model is required'); return; }
+    const mre = mintMrenclave.trim();
+    const pk = mintPubKey.trim();
+    if (!mre || !/^0x[0-9a-fA-F]{64}$/.test(mre)) { setLocalError('teeMrenclave must be a 0x-prefixed 32-byte hex string'); return; }
+    if (!pk || !/^0x[0-9a-fA-F]+$/.test(pk)) { setLocalError('teePublicKey must be hex bytes'); return; }
     setLocalError('');
     writeMint({
       address: nfaAddress,
       abi: nfaAbi,
       functionName: 'mint',
-      args: [mintRepo.trim(), mintApi.trim(), mintModel.trim()],
+      args: [mintRepo.trim(), mintApi.trim(), mintModel.trim(), mre as `0x${string}`, pk as `0x${string}`],
       chainId: contractChainId,
       account: address,
     } as any);
-  }, [writeMint, address, mintRepo, mintApi, mintModel]);
+  }, [writeMint, address, mintRepo, mintApi, mintModel, mintMrenclave, mintPubKey]);
 
   useEffect(() => {
     if (isMintConfirmed) {
@@ -111,6 +106,8 @@ export default function AgentSimPage() {
       setMintRepo('');
       setMintApi('');
       setMintModel('');
+      setMintMrenclave('');
+      setMintPubKey('');
       resetMint();
     }
   }, [isMintConfirmed, resetMint]);
@@ -130,11 +127,6 @@ export default function AgentSimPage() {
     query: { enabled: ids.length > 0 },
   });
 
-  const { data: agentDids } = useReadContracts({
-    contracts: ids.map(id => ({ address: nfaAddress, abi: nfaAbi, functionName: 'getDid' as const, args: [id] as const, chainId: contractChainId })),
-    query: { enabled: ids.length > 0 },
-  });
-
   const { data: vaultBalRaw } = useReadContract({
     address: fundVaultAddress, abi: fundVaultAbi, functionName: 'vaultBalance',
     chainId: contractChainId,
@@ -146,10 +138,8 @@ export default function AgentSimPage() {
   // Build agent list
   const agents = ids.map((id, i) => {
     const meta = agentMetas?.[i]?.status === 'success' ? (agentMetas[i].result as any) : null;
-    const did  = agentDids?.[i]?.status  === 'success' ? (agentDids[i].result  as string) : '';
     return {
       id: Number(id),
-      did,
       repo:        meta?.repo        ?? '',
       apiEndpoint: meta?.apiEndpoint ?? '',
       model:       meta?.model       ?? '',
@@ -159,35 +149,55 @@ export default function AgentSimPage() {
 
   const selected = agents.find(a => a.id === selectedId) ?? null;
 
-  // ── File hash ──────────────────────────────────────────────────────────────
-  const handleFile = useCallback(async (f: File) => {
-    const buf    = await f.arrayBuffer();
-    const digest = await crypto.subtle.digest('SHA-256', buf);
-    const hex    = '0x' + Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-    setCommitHash(hex);
-    setHashLabel(f.name);
-  }, []);
+  // ── BetRequest encoder ─────────────────────────────────────────────────────
+  const encodedBetRequest = useMemo(() => {
+    try {
+      if (!matchId || !betAmount || !minOdds || !deadline) return '0x' as `0x${string}`;
+      const dl = Math.floor(new Date(deadline).getTime() / 1000);
+      if (Number.isNaN(dl)) return '0x' as `0x${string}`;
+      return encodeAbiParameters(
+        [...BET_REQUEST_TYPES],
+        [
+          BigInt(matchId),
+          BigInt(outcomeIndex),
+          parseEther(betAmount as `${number}`),
+          parseEther(minOdds as `${number}`),
+          BigInt(dl),
+          BigInt(nonce || 0),
+        ]
+      );
+    } catch {
+      return '0x' as `0x${string}`;
+    }
+  }, [matchId, outcomeIndex, betAmount, minOdds, deadline, nonce]);
+
+  const applyEncodedBet = () => {
+    if (encodedBetRequest && encodedBetRequest !== '0x') {
+      setInitData(encodedBetRequest);
+    }
+  };
 
   // ── Submit ─────────────────────────────────────────────────────────────────
-  const canExecute = !!selected && !!contractAddr && !!commitHash && !!amount && parseFloat(amount) > 0 && !state.isPending && !state.isConfirming;
+  const canExecute = !!selected && !!contractAddr && /^0x[0-9a-fA-F]{40}$/.test(contractAddr)
+    && !!amount && parseFloat(amount) > 0
+    && !!initData && initData !== '0x'
+    && !state.isPending && !state.isConfirming;
 
   const handleExecute = async () => {
     setLocalError('');
     if (!address)     { setLocalError('Connect wallet first.'); return; }
     if (!selected)    { setLocalError('Select an NFA agent.'); return; }
-    if (!commitHash)  { setLocalError('Provide or hash a commit.'); return; }
-    if (!contractAddr){ setLocalError('Enter target contract address.'); return; }
+    if (!/^0x[0-9a-fA-F]{40}$/.test(contractAddr)) { setLocalError('Enter a valid target contract address.'); return; }
     if (!amount || parseFloat(amount) <= 0) { setLocalError('Enter funding amount.'); return; }
+    if (!initData || initData === '0x') { setLocalError('Provide initData (hex bytes) or build a BetRequest.'); return; }
+
     try {
       const { parseEther } = await import('viem');
       submit(
-        commitHash as `0x${string}`,
         contractAddr as `0x${string}`,
-        bizApi.trim(),
         parseEther(amount as `${number}`),
-        selected.did,
-        selected.repo,
-        selected.apiEndpoint,
+        selected.id,
+        initData,
       );
     } catch (e: any) { setLocalError(e?.message ?? 'Execute failed'); }
   };
@@ -202,7 +212,7 @@ export default function AgentSimPage() {
           <div className="agent-success-hash">{state.hash?.slice(0, 20)}…</div>
           <button
             className="btn-primary"
-            onClick={() => { resetSubmit(); setCommitHash(''); setContractAddr(''); setBizApi(''); setAmount(''); setHashLabel(''); }}
+            onClick={() => { resetSubmit(); setContractAddr(worldCupAgentVaultAddress); setAmount(''); setInitData('0x'); setSelectedId(null); }}
           >
             ← New Simulation
           </button>
@@ -304,12 +314,14 @@ export default function AgentSimPage() {
 
                 {selected && (
                   <div className="agent-terminal" style={{ borderLeftColor: selected.color + '80' }}>
-                    {(['did', 'repo', 'endpoint', 'model'] as const).map(k => (
+                    {(['id', 'repo', 'endpoint', 'model'] as const).map(k => (
                       <div key={k} className="agent-terminal-row">
                         <span style={{ color: 'rgba(255,255,255,0.15)' }}>{'> '}</span>
                         <span className="agent-terminal-key">{k.padEnd(8)}</span>
                         <span style={{ color: 'rgba(255,255,255,0.15)' }}>:</span>
-                        <span className="agent-terminal-value" style={{ color: selected.color, opacity: 0.9 }}>{(selected as any)[k] || '—'}</span>
+                        <span className="agent-terminal-value" style={{ color: selected.color, opacity: 0.9 }}>
+                          {k === 'id' ? selected.id : (selected as any)[k === 'endpoint' ? 'apiEndpoint' : k] || '—'}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -327,6 +339,12 @@ export default function AgentSimPage() {
                     </div>
                     <div className="input-group">
                       <input className="input-field" placeholder="Model (e.g. claude-3.5-sonnet)" value={mintModel} onChange={e => setMintModel(e.target.value)} />
+                    </div>
+                    <div className="input-group">
+                      <input className="input-field" placeholder="teeMrenclave (0x + 64 hex)" value={mintMrenclave} onChange={e => setMintMrenclave(e.target.value)} />
+                    </div>
+                    <div className="input-group">
+                      <input className="input-field" placeholder="teePublicKey (hex bytes)" value={mintPubKey} onChange={e => setMintPubKey(e.target.value)} />
                     </div>
                     {(localError || mintError) && (
                       <div className="info-box error">{(mintError as any)?.shortMessage ?? localError ?? String(mintError)}</div>
@@ -362,29 +380,7 @@ export default function AgentSimPage() {
                 </div>
                 <div className="input-group">
                   <label className="input-label">CONTRACT_ADDR</label>
-                  <input className="input-field" placeholder="0x..." value={contractAddr} onChange={e => setContractAddr(e.target.value)} />
-                </div>
-                <div className="input-group">
-                  <label className="input-label">COMMIT_HASH</label>
-                  <div className="agent-input-row">
-                    <input className="input-field" placeholder="0x... (paste or drop file)" value={commitHash} onChange={e => { setCommitHash(e.target.value); setHashLabel(''); }} />
-                    <div
-                      className={`agent-drop-zone ${dragging ? 'dragging' : ''}`}
-                      onClick={() => fileRef.current?.click()}
-                      onDragOver={e => { e.preventDefault(); setDragging(true); }}
-                      onDragLeave={() => setDragging(false)}
-                      onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1.5v6M3 5l3 3 3-3M1.5 10h9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                      <span>{hashLabel || 'hash file'}</span>
-                    </div>
-                    <input ref={fileRef} type="file" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-                  </div>
-                  {commitHash && <div className="agent-hash-ok">✓ {commitHash.slice(0, 24)}…</div>}
-                </div>
-                <div className="input-group">
-                  <label className="input-label">BIZ_API <span style={{ opacity: 0.5 }}>(optional)</span></label>
-                  <input className="input-field" placeholder="https://github.com/org/project" value={bizApi} onChange={e => setBizApi(e.target.value)} />
+                  <input className="input-field" placeholder="0x..." value={contractAddr} onChange={e => setContractAddr(e.target.value as `0x${string}`)} />
                 </div>
               </section>
 
@@ -402,25 +398,69 @@ export default function AgentSimPage() {
                 </div>
               </section>
 
-              {/* ④ CALLDATA_PREVIEW */}
+              {/* ④ INIT_DATA */}
               <section>
                 <div className="detail-section-label">
                   <span className="detail-section-number">④</span>
-                  <span>CALLDATA_PREVIEW</span>
-                  <div className="agent-preview-live" />
-                  <span style={{ fontSize: '0.625rem', color: 'var(--text-muted)' }}>live</span>
+                  <span>INIT_DATA</span>
                   <span className="detail-section-line" />
                 </div>
-                <CalldataPreview
-                  commitHash={commitHash}
-                  contractAddr={contractAddr}
-                  bizApi={bizApi}
-                  amount={amount}
-                  agentDid={selected?.did ?? ''}
-                  agentRepo={selected?.repo ?? ''}
-                  agentEndpoint={selected?.apiEndpoint ?? ''}
-                  imAddr={investmentManagerAddress}
-                />
+                <div className="input-group">
+                  <label className="input-label">HEX CALLDATA</label>
+                  <textarea
+                    className="input-field"
+                    rows={3}
+                    placeholder="0x..."
+                    value={initData}
+                    onChange={e => {
+                      const v = e.target.value.trim();
+                      setInitData((v.startsWith('0x') ? v : `0x${v}`) as `0x${string}`);
+                    }}
+                    style={{ width: '100%', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}
+                  />
+                </div>
+
+                <div style={{ margin: '16px 0', fontSize: 12, color: 'rgba(255,255,255,0.25)', textAlign: 'center' }}>or build a WorldCup BetRequest</div>
+
+                <div className="asv-funding-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: 12 }}>
+                  <div className="asv-funding-cell">
+                    <span className="asv-funding-label">Match ID</span>
+                    <input className="input-field" type="number" min="0" value={matchId} onChange={e => setMatchId(e.target.value)} />
+                  </div>
+                  <div className="asv-funding-cell">
+                    <span className="asv-funding-label">Outcome</span>
+                    <select className="input-field" value={outcomeIndex} onChange={e => setOutcomeIndex(e.target.value)}>
+                      <option value="0">Home (0)</option>
+                      <option value="1">Draw (1)</option>
+                      <option value="2">Away (2)</option>
+                    </select>
+                  </div>
+                  <div className="asv-funding-cell">
+                    <span className="asv-funding-label">Bet Amount (ETH)</span>
+                    <input className="input-field" type="number" min="0" step="0.001" value={betAmount} onChange={e => setBetAmount(e.target.value)} />
+                  </div>
+                  <div className="asv-funding-cell">
+                    <span className="asv-funding-label">Min Odds (e.g. 1.8)</span>
+                    <input className="input-field" type="number" min="0" step="0.01" value={minOdds} onChange={e => setMinOdds(e.target.value)} />
+                  </div>
+                  <div className="asv-funding-cell">
+                    <span className="asv-funding-label">Deadline</span>
+                    <input className="input-field" type="datetime-local" value={deadline} onChange={e => setDeadline(e.target.value)} />
+                  </div>
+                  <div className="asv-funding-cell">
+                    <span className="asv-funding-label">Nonce</span>
+                    <input className="input-field" type="number" min="0" value={nonce} onChange={e => setNonce(e.target.value)} />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  disabled={!encodedBetRequest || encodedBetRequest === '0x'}
+                  onClick={applyEncodedBet}
+                  style={{ marginBottom: 12 }}
+                >
+                  Apply Encoded BetRequest
+                </button>
               </section>
 
               {/* Execute */}
@@ -434,13 +474,13 @@ export default function AgentSimPage() {
                   onClick={handleExecute}
                 >
                   {state.isPending || state.isConfirming ? (
-                    <><span className="loading-spinner" /> Executing…</>
+                    <><span className="loading-spinner" /> Submitting…</>
                   ) : (
-                    <>Execute Transaction →</>
+                    <>Submit Project →</>
                   )}
                 </button>
                 <div className="agent-footer-note">
-                  equivalent to: npx hardhat run scripts/demo-agent.ts --network arbitrumSepolia
+                  submits to InvestmentManager.submitProject(contractAddr, requestedAmount, agentId, initData)
                 </div>
               </section>
 

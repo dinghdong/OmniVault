@@ -1,27 +1,24 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { useAccount } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { formatUnits } from 'viem';
 import { useProjects, ProjectData } from '../hooks/useProjects';
 import { useVaultStats } from '../hooks/useVaultStats';
 import { useVeto } from '../hooks/useVeto';
-import { useClaimPayout } from '../hooks/useClaimPayout';
-import { explorerUrl } from '../hooks/contracts';
+import {
+  explorerUrl,
+  investmentManagerAddress,
+  investmentManagerAbi,
+  contractChainId,
+} from '../hooks/contracts';
 
 // ─── NFA pixel avatar (deterministic, same as agent-sim) ─────────────────────
 
 const AGENT_COLORS = ['#00ff88', '#63b3ed', '#a78bfa', '#f97316', '#f2cc60', '#f472b6'];
 
-function didColor(did: string): string {
-  let h = 0;
-  for (let i = 0; i < did.length; i++) h = (h * 31 + did.charCodeAt(i)) >>> 0;
-  return AGENT_COLORS[h % AGENT_COLORS.length];
-}
-
-function agentIdFromDid(did: string): number {
-  const m = did.match(/:(\d+)$/);
-  return m ? parseInt(m[1], 10) : 1;
+function agentColor(id: number): string {
+  return AGENT_COLORS[id % AGENT_COLORS.length];
 }
 
 function AgentAvatar({ id, color, size = 20 }: { id: number; color: string; size?: number }) {
@@ -52,11 +49,10 @@ function AgentAvatar({ id, color, size = 20 }: { id: number; color: string; size
   );
 }
 
-function AgentBadge({ did }: { did: string }) {
-  if (!did || !did.startsWith('did:')) return null;
-  const color   = didColor(did);
-  const agentId = agentIdFromDid(did);
-  const abbrev  = did.length > 28 ? `${did.slice(0, 16)}…${did.slice(-6)}` : did;
+function AgentBadge({ agentId }: { agentId: number }) {
+  if (!agentId) return null;
+  const color = agentColor(agentId);
+  const label = `Agent #${String(agentId).padStart(3, '0')}`;
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 5,
@@ -71,7 +67,7 @@ function AgentBadge({ did }: { did: string }) {
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
         fontSize: 9, color, opacity: 0.8, letterSpacing: '0.02em',
         maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-      }}>{abbrev}</span>
+      }}>{label}</span>
     </div>
   );
 }
@@ -109,15 +105,13 @@ function useCountdown(endTimestamp: bigint) {
 
 const STATUS_COLORS: Record<string, string> = {
   None:             'badge-gray',
-  Pending:          'badge-yellow',
   Auditing:         'badge-blue',
   PendingExecution: 'badge-purple',
   Rejected:         'badge-red',
   Active:           'badge-green',
-  CircuitBroken:    'badge-red',
-  Exited:           'badge-gray',
-  WriteOff:         'badge-red',
+  Settled:          'badge-gray',
   Vetoed:           'badge-red',
+  CircuitBroken:    'badge-red',
 };
 
 function StatusBadge({ label }: { label: string }) {
@@ -135,22 +129,25 @@ interface ProjectCardProps {
 function ProjectCard({ project, onViewAudit }: ProjectCardProps) {
   const { address } = useAccount();
   const { veto, isPending, isConfirming, isConfirmed, error } = useVeto();
+  const {
+    writeContract: executeProject,
+    data: execHash,
+    isPending: execPending,
+    error: execError,
+  } = useWriteContract();
+  const { isLoading: execConfirming, isSuccess: execSuccess } =
+    useWaitForTransactionReceipt({ hash: execHash });
+  const execBusy = execPending || execConfirming;
+
   const timelockCountdown = useCountdown(project.executionUnlocksAt ?? BigInt(0));
 
-  // Vesting / claim — only active for the applicant when project is Active
-  const isApplicant = !!address && !!project.applicant &&
-    address.toLowerCase() === project.applicant.toLowerCase();
-  const isActive = project.statusNum === 5; // Active
-  const {
-    vestedBps, claimable, released, total,
-    claim, isPending: claimPending, isConfirming: claimConfirming,
-    isConfirmed: claimConfirmed, error: claimError,
-  } = useClaimPayout(project.projectId, isApplicant && isActive);
+  const isSettled = project.statusNum === 5;
+  const isActive = project.statusNum === 4;
 
-  // Execution timelock: IM moved to PendingExecution, counting down to executeInvestment
+  // Execution timelock: PendingExecution (2) counting down to executeProject()
   const executionUnlocksMs = Number(project.executionUnlocksAt ?? 0) * 1000;
-  const timelockActive  = project.statusNum === 3 && executionUnlocksMs > 0 && Date.now() < executionUnlocksMs;
-  const timelockExpired = project.statusNum === 3 && executionUnlocksMs > 0 && Date.now() >= executionUnlocksMs;
+  const timelockActive  = project.statusNum === 2 && executionUnlocksMs > 0 && Date.now() < executionUnlocksMs;
+  const timelockExpired = project.statusNum === 2 && executionUnlocksMs > 0 && Date.now() >= executionUnlocksMs;
 
   // Show veto button during PendingExecution timelock window for any connected LP
   const showVeto = timelockActive && !!address;
@@ -171,7 +168,7 @@ function ProjectCard({ project, onViewAudit }: ProjectCardProps) {
         {project.auditedAt > 0n && auditScore > 0 && (
           <span className="proj-score">Score: {auditScore}%</span>
         )}
-        {project.agentDid && <AgentBadge did={project.agentDid} />}
+        {Number(project.agentId) > 0 && <AgentBadge agentId={Number(project.agentId)} />}
       </div>
 
       <div className="project-meta">
@@ -186,16 +183,22 @@ function ProjectCard({ project, onViewAudit }: ProjectCardProps) {
             {shortAddr(project.applicant)}
           </a>
         </div>
-        {project.bizApi && (
+        {project.requestedAmount > 0n && (
           <div className="project-meta-row">
-            <span className="meta-label">Project URL</span>
-            <span className="meta-value meta-truncate">{project.bizApi}</span>
+            <span className="meta-label">Requested</span>
+            <span className="meta-value">{fmtEth(project.requestedAmount)} ETH</span>
           </div>
         )}
-        {project.investmentAmount > 0 && (
+        {(isActive || isSettled) && project.fundedAmount > 0n && (
           <div className="project-meta-row">
-            <span className="meta-label">Investment</span>
-            <span className="meta-value">{fmtEth(project.investmentAmount)} ETH</span>
+            <span className="meta-label">{isSettled ? 'Funded' : 'Funded'}</span>
+            <span className="meta-value">{fmtEth(project.fundedAmount)} ETH</span>
+          </div>
+        )}
+        {isSettled && project.returnedAmount > 0n && (
+          <div className="project-meta-row">
+            <span className="meta-label">Returned</span>
+            <span className="meta-value">{fmtEth(project.returnedAmount)} ETH</span>
           </div>
         )}
         {/* 3D score breakdown if audited */}
@@ -226,11 +229,35 @@ function ProjectCard({ project, onViewAudit }: ProjectCardProps) {
             </>
           ) : (
             <div className="cw-hint" style={{ color: '#00ff88' }}>
-              ✓ Timelock expired — awaiting executeInvestment()…
+              ✓ Timelock expired — awaiting executeProject()…
             </div>
           )}
         </div>
       )}
+
+      {/* Execute button once timelock expires */}
+      {timelockExpired && !execSuccess && (
+        <div className="community-window" style={{ borderColor: 'rgba(0,255,136,0.3)', background: 'rgba(0,255,136,0.05)' }}>
+          <div className="cw-label" style={{ color: '#00ff88' }}>Ready to Execute</div>
+          <div className="cw-hint">LP veto window has closed. Execute the project to release funds.</div>
+          <button
+            className="btn-primary"
+            style={{ marginTop: 10 }}
+            disabled={execBusy}
+            onClick={() => executeProject({
+              address: investmentManagerAddress,
+              abi: investmentManagerAbi,
+              functionName: 'executeProject',
+              args: [BigInt(project.projectId)],
+              chainId: contractChainId,
+            } as any)}
+          >
+            {execBusy ? 'Executing…' : 'Execute Project'}
+          </button>
+          {execError && <div className="proj-tx-error" style={{ marginTop: 8 }}>{(execError as Error).message?.slice(0, 80)}</div>}
+        </div>
+      )}
+      {execSuccess && <div className="proj-tx-success">Project executed ✓</div>}
 
       {/* Audit content hash (on-chain verifiable) */}
       {contentHashSet && (
@@ -241,37 +268,6 @@ function ProjectCard({ project, onViewAudit }: ProjectCardProps) {
           </svg>
           <span className="zg-label">Audit fingerprint</span>
           <code className="zg-hash">{project.auditContentHash.slice(0, 10)}…</code>
-        </div>
-      )}
-
-      {/* Vesting / claim panel — visible only to the applicant on Active projects */}
-      {isApplicant && isActive && total > BigInt(0) && (
-        <div className="vesting-panel">
-          <div className="vesting-header">
-            <span className="vesting-title">Vesting Schedule</span>
-            <span className="vesting-pct">{(Number(vestedBps) / 100).toFixed(1)}% vested</span>
-          </div>
-          <div className="vesting-bar-track">
-            <div
-              className="vesting-bar-fill"
-              style={{ width: `${Math.min(100, Number(vestedBps) / 100).toFixed(1)}%` }}
-            />
-          </div>
-          <div className="vesting-meta">
-            <span>Claimable: {parseFloat(formatUnits(claimable, 18)).toFixed(4)} ETH</span>
-            <span>Released: {parseFloat(formatUnits(released, 18)).toFixed(4)} / {parseFloat(formatUnits(total, 18)).toFixed(4)} ETH</span>
-          </div>
-          {claimable > BigInt(0) && (
-            <button
-              className="btn-claim"
-              onClick={claim}
-              disabled={claimPending || claimConfirming}
-            >
-              {claimPending || claimConfirming ? 'Claiming…' : `Claim ${parseFloat(formatUnits(claimable, 18)).toFixed(4)} ETH`}
-            </button>
-          )}
-          {claimConfirmed && <div className="proj-tx-success">Claimed ✓</div>}
-          {claimError && <div className="proj-tx-error">{(claimError as Error).message?.slice(0, 80)}</div>}
         </div>
       )}
 

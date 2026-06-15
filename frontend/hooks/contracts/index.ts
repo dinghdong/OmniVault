@@ -8,6 +8,8 @@ export const omniOracleAddress          = (process.env.NEXT_PUBLIC_OMNI_ORACLE_A
 export const revenueShareAddress        = (process.env.NEXT_PUBLIC_REVENUE_SHARE_ADDRESS        || '0x0000000000000000000000000000000000000000') as `0x${string}`;
 export const scoringEngineAddress       = (process.env.NEXT_PUBLIC_SCORING_ENGINE_ADDRESS       || '0x0000000000000000000000000000000000000000') as `0x${string}`;
 export const nfaAddress                 = (process.env.NEXT_PUBLIC_NFA_ADDRESS                  || '0x0000000000000000000000000000000000000000') as `0x${string}`;
+export const worldCupAgentVaultAddress  = (process.env.NEXT_PUBLIC_WORLD_CUP_AGENT_VAULT_ADDRESS|| '0x0000000000000000000000000000000000000000') as `0x${string}`;
+export const mockPolyMarketAddress      = (process.env.NEXT_PUBLIC_MOCK_POLY_MARKET_ADDRESS     || '0x0000000000000000000000000000000000000000') as `0x${string}`;
 export const explorerUrl                =  process.env.NEXT_PUBLIC_EXPLORER_URL                 || 'https://sepolia.arbiscan.io';
 
 // Chain ID (421614 = Arbitrum Sepolia)
@@ -84,7 +86,7 @@ export const fundTokenAbi = [
   },
 ] as const;
 
-// ─── InvestmentManager ABI ────────────────────────────────────────────────────
+// ─── InvestmentManager ABI (A2A flow) ─────────────────────────────────────────
 export const investmentManagerAbi = [
   {
     name: 'projectCount',
@@ -104,13 +106,10 @@ export const investmentManagerAbi = [
     name: 'submitProject',
     type: 'function',
     inputs: [
-      { name: 'commitHash',        type: 'bytes32' },
-      { name: 'contractAddr',      type: 'address' },
-      { name: 'bizApi',            type: 'string'  },
-      { name: 'requestedAmount',   type: 'uint256' },
-      { name: 'agentDid',          type: 'string'  },
-      { name: 'agentRepo',         type: 'string'  },
-      { name: 'agentApiEndpoint',  type: 'string'  },
+      { name: 'contractAddr',    type: 'address' },
+      { name: 'requestedAmount', type: 'uint256' },
+      { name: 'agentId',         type: 'uint256' },
+      { name: 'initData',        type: 'bytes'   },
     ],
     outputs: [{ name: 'projectId', type: 'uint256' }],
     stateMutability: 'nonpayable',
@@ -120,16 +119,12 @@ export const investmentManagerAbi = [
     type: 'function',
     inputs: [{ name: 'projectId', type: 'uint256' }],
     outputs: [
-      // Identity fields
       { name: 'applicant',          type: 'address' },
-      { name: 'commitHash',         type: 'bytes32' },
       { name: 'contractAddr',       type: 'address' },
-      { name: 'bizApi',             type: 'string'  },
-      // AI Agent metadata (v2)
-      { name: 'agentDid',           type: 'string'  },
-      { name: 'agentRepo',          type: 'string'  },
-      { name: 'agentApiEndpoint',   type: 'string'  },
-      // Packed status + scores + timestamps
+      { name: 'requestedAmount',    type: 'uint256' },
+      { name: 'fundedAmount',       type: 'uint256' },
+      { name: 'agentId',            type: 'uint256' },
+      { name: 'initData',           type: 'bytes'   },
       { name: 'status',             type: 'uint8'   },
       { name: 'auditScore',         type: 'uint8'   },
       { name: 'reliabilityScore',   type: 'uint8'   },
@@ -137,15 +132,10 @@ export const investmentManagerAbi = [
       { name: 'marketFitScore',     type: 'uint8'   },
       { name: 'submittedAt',        type: 'uint40'  },
       { name: 'auditedAt',          type: 'uint40'  },
-      { name: 'investedAt',         type: 'uint40'  },
       { name: 'executionUnlocksAt', type: 'uint40'  },
-      { name: 'exitedAt',           type: 'uint40'  },
-      // Value fields
-      { name: 'requestedAmount',    type: 'uint256' },
+      { name: 'settledAt',          type: 'uint40'  },
       { name: 'auditContentHash',   type: 'bytes32' },
-      { name: 'investmentAmount',   type: 'uint256' },
-      { name: 'releasedAmount',     type: 'uint256' },
-      { name: 'exitProceeds',       type: 'uint256' },
+      { name: 'returnedAmount',     type: 'uint256' },
     ],
     stateMutability: 'view',
   },
@@ -162,54 +152,14 @@ export const investmentManagerAbi = [
     stateMutability: 'view',
   },
   {
-    name: 'getClaimableAmount',
-    type: 'function',
-    inputs: [{ name: 'projectId', type: 'uint256' }],
-    outputs: [{ name: '', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    name: 'vestingProgress',
-    type: 'function',
-    inputs: [{ name: 'projectId', type: 'uint256' }],
-    outputs: [
-      { name: 'vestedBps',  type: 'uint256' },
-      { name: 'claimable',  type: 'uint256' },
-      { name: 'released',   type: 'uint256' },
-      { name: 'total',      type: 'uint256' },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    name: 'claimPayout',
-    type: 'function',
-    inputs: [{ name: 'projectId', type: 'uint256' }],
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    name: 'simulateExit',
-    type: 'function',
-    inputs: [
-      { name: 'projectId',          type: 'uint256' },
-      { name: 'simulatedReturnBps', type: 'uint256' },
-    ],
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    name: 'executeInvestment',
-    type: 'function',
-    inputs: [
-      { name: 'projectId',       type: 'uint256' },
-      { name: 'amount',          type: 'uint256' },
-      { name: 'vestingSchedule', type: 'bytes'   },
-    ],
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
     name: 'settleAudit',
+    type: 'function',
+    inputs: [{ name: 'projectId', type: 'uint256' }],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    name: 'executeProject',
     type: 'function',
     inputs: [{ name: 'projectId', type: 'uint256' }],
     outputs: [],
@@ -229,13 +179,6 @@ export const investmentManagerAbi = [
     outputs: [],
     stateMutability: 'nonpayable',
   },
-  {
-    name: 'markWriteOff',
-    type: 'function',
-    inputs: [{ name: 'projectId', type: 'uint256' }],
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
   // Events
   {
     name: 'ProjectSubmitted',
@@ -243,10 +186,9 @@ export const investmentManagerAbi = [
     inputs: [
       { name: 'projectId',       type: 'uint256', indexed: true  },
       { name: 'applicant',       type: 'address', indexed: true  },
-      { name: 'commitHash',      type: 'bytes32', indexed: false },
+      { name: 'agentId',         type: 'uint256', indexed: true  },
       { name: 'contractAddr',    type: 'address', indexed: false },
       { name: 'requestedAmount', type: 'uint256', indexed: false },
-      { name: 'agentDid',        type: 'string',  indexed: false },
     ],
   },
   {
@@ -290,15 +232,22 @@ export const investmentManagerAbi = [
     type: 'event',
     inputs: [
       { name: 'projectId', type: 'uint256', indexed: true  },
+      { name: 'vault',     type: 'address', indexed: true  },
       { name: 'amount',    type: 'uint256', indexed: false },
-      { name: 'upfront',   type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    name: 'ProjectSettled',
+    type: 'event',
+    inputs: [
+      { name: 'projectId',     type: 'uint256', indexed: true  },
+      { name: 'returnedAmount',type: 'uint256', indexed: false },
     ],
   },
 ] as const;
 
 // ─── OmniOracle / MockOmniOracleV2 ABI ───────────────────────────────────────
 export const omniOracleAbi = [
-  // ── View functions ──────────────────────────────────────────────────────────
   {
     name: 'fulfilledScore',
     type: 'function',
@@ -324,7 +273,14 @@ export const omniOracleAbi = [
     outputs: [{ name: '', type: 'bytes32' }],
     stateMutability: 'view',
   },
-  // ── MockOmniOracleV2 demo helper — setResult(projectId, finalScore, r, q, m, contentHash) ──
+  {
+    name: 'requestAudit',
+    type: 'function',
+    inputs: [{ name: 'projectId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'bytes32' }],
+    stateMutability: 'nonpayable',
+  },
+  // MockOmniOracleV2 demo helper
   {
     name: 'setResult',
     type: 'function',
@@ -339,14 +295,12 @@ export const omniOracleAbi = [
     outputs: [],
     stateMutability: 'nonpayable',
   },
-  // ── Events ──────────────────────────────────────────────────────────────────
   {
     name: 'AuditRequested',
     type: 'event',
     inputs: [
-      { name: 'projectId',      type: 'uint256', indexed: true  },
-      { name: 'requestId',      type: 'bytes32', indexed: true  },
-      { name: 'sourceCodeHash', type: 'string',  indexed: false },
+      { name: 'projectId', type: 'uint256', indexed: true  },
+      { name: 'requestId', type: 'bytes32', indexed: true  },
     ],
   },
   {
@@ -370,6 +324,153 @@ export const omniOracleAbi = [
       { name: 'requestId', type: 'bytes32', indexed: true  },
       { name: 'reason',    type: 'string',  indexed: false },
     ],
+  },
+] as const;
+
+// ─── WorldCupAgentVault ABI ───────────────────────────────────────────────────
+export const worldCupAgentVaultAbi = [
+  {
+    name: 'createBetOrder',
+    type: 'function',
+    inputs: [
+      { name: 'projectId',    type: 'uint256' },
+      { name: 'agentId',      type: 'uint256' },
+      { name: 'fundedAmount', type: 'uint256' },
+      { name: 'initData',     type: 'bytes'   },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    name: 'executeBetOrder',
+    type: 'function',
+    inputs: [
+      { name: 'projectId', type: 'uint256' },
+      { name: 'signature', type: 'bytes'   },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    name: 'settleBetOrder',
+    type: 'function',
+    inputs: [{ name: 'projectId', type: 'uint256' }],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    name: 'betOrders',
+    type: 'function',
+    inputs: [{ name: 'projectId', type: 'uint256' }],
+    outputs: [
+      { name: 'projectId',     type: 'uint256' },
+      { name: 'agentId',       type: 'uint256' },
+      { name: 'agentOwner',    type: 'address' },
+      { name: 'market',        type: 'address' },
+      { name: 'matchId',       type: 'uint256' },
+      { name: 'outcomeIndex',  type: 'uint256' },
+      { name: 'betAmount',     type: 'uint256' },
+      { name: 'minOdds',       type: 'uint256' },
+      { name: 'fundedAmount',  type: 'uint256' },
+      { name: 'returnAmount',  type: 'uint256' },
+      { name: 'agentShareBps', type: 'uint256' },
+      { name: 'deadline',      type: 'uint256' },
+      { name: 'nonce',         type: 'uint256' },
+      { name: 'createdAt',     type: 'uint40'  },
+      { name: 'executedAt',    type: 'uint40'  },
+      { name: 'settledAt',     type: 'uint40'  },
+      { name: 'status',        type: 'uint8'   },
+    ],
+    stateMutability: 'view',
+  },
+] as const;
+
+// ─── MockPolyMarket ABI ───────────────────────────────────────────────────────
+export const mockPolyMarketAbi = [
+  {
+    name: 'createMatch',
+    type: 'function',
+    inputs: [
+      { name: 'home',     type: 'string'  },
+      { name: 'away',     type: 'string'  },
+      { name: 'homeOdds', type: 'uint256' },
+      { name: 'drawOdds', type: 'uint256' },
+      { name: 'awayOdds', type: 'uint256' },
+      { name: 'expiration',type:'uint256' },
+    ],
+    outputs: [{ name: 'matchId', type: 'uint256' }],
+    stateMutability: 'nonpayable',
+  },
+  {
+    name: 'placeBet',
+    type: 'function',
+    inputs: [
+      { name: 'matchId',      type: 'uint256' },
+      { name: 'outcomeIndex', type: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'payable',
+  },
+  {
+    name: 'resolveMatch',
+    type: 'function',
+    inputs: [
+      { name: 'matchId',      type: 'uint256' },
+      { name: 'outcomeIndex', type: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    name: 'redeem',
+    type: 'function',
+    inputs: [{ name: 'matchId', type: 'uint256' }],
+    outputs: [{ name: 'payout', type: 'uint256' }],
+    stateMutability: 'nonpayable',
+  },
+  {
+    name: 'getOdds',
+    type: 'function',
+    inputs: [
+      { name: 'matchId',      type: 'uint256' },
+      { name: 'outcomeIndex', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    name: 'pendingPayout',
+    type: 'function',
+    inputs: [
+      { name: 'matchId', type: 'uint256' },
+      { name: 'bettor',  type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    name: 'matches',
+    type: 'function',
+    inputs: [{ name: 'matchId', type: 'uint256' }],
+    outputs: [
+      { name: 'home',       type: 'string'  },
+      { name: 'away',       type: 'string'  },
+      { name: 'homeOdds',   type: 'uint256' },
+      { name: 'drawOdds',   type: 'uint256' },
+      { name: 'awayOdds',   type: 'uint256' },
+      { name: 'expiration', type: 'uint256' },
+      { name: 'totalPool',  type: 'uint256' },
+      { name: 'outcome',    type: 'int8'    },
+      { name: 'status',     type: 'uint8'   },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    name: 'matchCount',
+    type: 'function',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
   },
 ] as const;
 
@@ -461,9 +562,11 @@ export const nfaAbi = [
     name: 'mint',
     type: 'function',
     inputs: [
-      { name: 'repo',        type: 'string' },
-      { name: 'apiEndpoint', type: 'string' },
-      { name: 'model',       type: 'string' },
+      { name: 'repo',         type: 'string'  },
+      { name: 'apiEndpoint',  type: 'string'  },
+      { name: 'model',        type: 'string'  },
+      { name: 'teeMrenclave', type: 'bytes32' },
+      { name: 'teePublicKey', type: 'bytes'   },
     ],
     outputs: [{ name: 'tokenId', type: 'uint256' }],
     stateMutability: 'nonpayable',
@@ -475,10 +578,12 @@ export const nfaAbi = [
     outputs: [{
       name: '', type: 'tuple',
       components: [
-        { name: 'repo',        type: 'string'  },
-        { name: 'apiEndpoint', type: 'string'  },
-        { name: 'model',       type: 'string'  },
-        { name: 'mintedAt',    type: 'uint256' },
+        { name: 'repo',         type: 'string'  },
+        { name: 'apiEndpoint',  type: 'string'  },
+        { name: 'model',        type: 'string'  },
+        { name: 'teeMrenclave', type: 'bytes32' },
+        { name: 'teePublicKey', type: 'bytes'   },
+        { name: 'mintedAt',     type: 'uint256' },
       ],
     }],
     stateMutability: 'view',
@@ -522,19 +627,17 @@ export const nfaAbi = [
     name: 'AgentMinted',
     type: 'event',
     inputs: [
-      { name: 'tokenId', type: 'uint256', indexed: true  },
-      { name: 'owner',   type: 'address', indexed: true  },
-      { name: 'did',     type: 'string',  indexed: false },
-      { name: 'repo',    type: 'string',  indexed: false },
-      { name: 'model',   type: 'string',  indexed: false },
+      { name: 'tokenId',      type: 'uint256', indexed: true  },
+      { name: 'owner',        type: 'address', indexed: true  },
+      { name: 'did',          type: 'string',  indexed: false },
+      { name: 'repo',         type: 'string',  indexed: false },
+      { name: 'model',        type: 'string',  indexed: false },
+      { name: 'teeMrenclave', type: 'bytes32', indexed: false },
     ],
   },
 ] as const;
 
 // ─── Project status labels ────────────────────────────────────────────────────
 export const PROJECT_STATUS = [
-  'None', 'Pending', 'Auditing', 'PendingExecution',
-  'Rejected', 'Active', 'CircuitBroken', 'Exited', 'WriteOff', 'Vetoed',
+  'None', 'Auditing', 'PendingExecution', 'Rejected', 'Active', 'Settled', 'Vetoed', 'CircuitBroken',
 ] as const;
-
-export type ProjectStatus = typeof PROJECT_STATUS[number];

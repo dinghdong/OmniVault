@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/// @title MockOmniOracleV2 — Test stub with 3D scores
+/// @title MockOmniOracleV2 — Test stub with 3D scores for A2A flow
 contract MockOmniOracleV2 {
     struct AuditResult {
         uint256 finalScore;   // 0 = not fulfilled; MAX = failed; else score+1
@@ -15,15 +15,11 @@ contract MockOmniOracleV2 {
     uint256 public lastRequestedProjectId;
     bytes32 public constant MOCK_REQUEST_ID = keccak256("mock-request");
 
-    event AuditRequested(uint256 indexed projectId, string commitHash, string bizApi);
+    event AuditRequested(uint256 indexed projectId);
 
-    function requestAudit(
-        uint256 projectId,
-        string  calldata commitHash,
-        string  calldata bizApi
-    ) external returns (bytes32) {
+    function requestAudit(uint256 projectId) external returns (bytes32) {
         lastRequestedProjectId = projectId;
-        emit AuditRequested(projectId, commitHash, bizApi);
+        emit AuditRequested(projectId);
         return MOCK_REQUEST_ID;
     }
 

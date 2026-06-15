@@ -10,45 +10,34 @@ import {
 export interface ProjectData {
   projectId: number;
   applicant: string;
-  commitHash: string;
   contractAddr: string;
-  bizApi: string;
-  // A2A identity (v2)
-  agentDid: string;
-  agentRepo: string;
-  agentApiEndpoint: string;
-  // status
+  requestedAmount: bigint;
+  fundedAmount: bigint;
+  agentId: bigint;
+  initData: string;
   statusNum: number;
   statusLabel: string;
-  // 3D audit scores (v2)
   auditScore: number;
   reliabilityScore: number;
   qualityScore: number;
   marketFitScore: number;
-  // timestamps
   submittedAt: bigint;
   auditedAt: bigint;
-  investedAt: bigint;
   executionUnlocksAt: bigint;
-  exitedAt: bigint;
-  // amounts
-  requestedAmount: bigint;
+  settledAt: bigint;
   auditContentHash: string;
-  investmentAmount: bigint;
-  releasedAmount: bigint;
-  exitProceeds: bigint;
+  returnedAmount: bigint;
 }
 
 const EMPTY_PROJECT = (id: number): ProjectData => ({
   projectId: id,
-  applicant: '', commitHash: '', contractAddr: '', bizApi: '',
-  agentDid: '', agentRepo: '', agentApiEndpoint: '',
+  applicant: '', contractAddr: '',
+  requestedAmount: 0n, fundedAmount: 0n, agentId: 0n, initData: '',
   statusNum: 0, statusLabel: 'None',
   auditScore: 0, reliabilityScore: 0, qualityScore: 0, marketFitScore: 0,
-  submittedAt: 0n, auditedAt: 0n, investedAt: 0n,
-  executionUnlocksAt: 0n, exitedAt: 0n,
-  requestedAmount: 0n, auditContentHash: '',
-  investmentAmount: 0n, releasedAmount: 0n, exitProceeds: 0n,
+  submittedAt: 0n, auditedAt: 0n,
+  executionUnlocksAt: 0n, settledAt: 0n,
+  auditContentHash: '', returnedAmount: 0n,
 });
 
 /** Auto-fetches projectCount if not provided. */
@@ -85,59 +74,49 @@ export function useProjects(externalCount?: number) {
 
     const p = pr.result as any;
 
-    // v2 struct layout (positional fallback when named access unavailable):
+    // New A2A struct layout:
     // [0]  applicant          address
-    // [1]  commitHash         bytes32
-    // [2]  contractAddr       address
-    // [3]  bizApi             string
-    // [4]  agentDid           string   ← NEW
-    // [5]  agentRepo          string   ← NEW
-    // [6]  agentApiEndpoint   string   ← NEW
-    // [7]  status             uint8
-    // [8]  auditScore         uint8
-    // [9]  reliabilityScore   uint8    ← NEW
-    // [10] qualityScore       uint8    ← NEW
-    // [11] marketFitScore     uint8    ← NEW
-    // [12] submittedAt        uint40
-    // [13] auditedAt          uint40
-    // [14] investedAt         uint40
-    // [15] executionUnlocksAt uint40
-    // [16] exitedAt           uint40
-    // [17] requestedAmount    uint256
-    // [18] auditContentHash   bytes32
-    // [19] investmentAmount   uint256
-    // [20] releasedAmount     uint256
-    // [21] exitProceeds       uint256
+    // [1]  contractAddr       address
+    // [2]  requestedAmount    uint256
+    // [3]  fundedAmount       uint256
+    // [4]  agentId            uint256
+    // [5]  initData           bytes
+    // [6]  status             uint8
+    // [7]  auditScore         uint8
+    // [8]  reliabilityScore   uint8
+    // [9]  qualityScore       uint8
+    // [10] marketFitScore     uint8
+    // [11] submittedAt        uint40
+    // [12] auditedAt          uint40
+    // [13] executionUnlocksAt uint40
+    // [14] settledAt          uint40
+    // [15] auditContentHash   bytes32
+    // [16] returnedAmount     uint256
     const get = (name: string, idx: number) =>
       p[name] !== undefined ? p[name] : p[idx];
 
-    const statusNum = Number(get('status', 7));
+    const statusNum = Number(get('status', 6));
 
     return {
       projectId:          id,
       applicant:          String(get('applicant',          0)  ?? ''),
-      commitHash:         String(get('commitHash',         1)  ?? ''),
-      contractAddr:       String(get('contractAddr',       2)  ?? ''),
-      bizApi:             String(get('bizApi',             3)  ?? ''),
-      agentDid:           String(get('agentDid',           4)  ?? ''),
-      agentRepo:          String(get('agentRepo',          5)  ?? ''),
-      agentApiEndpoint:   String(get('agentApiEndpoint',   6)  ?? ''),
+      contractAddr:       String(get('contractAddr',       1)  ?? ''),
+      requestedAmount:    BigInt(get('requestedAmount',    2)  ?? 0),
+      fundedAmount:       BigInt(get('fundedAmount',       3)  ?? 0),
+      agentId:            BigInt(get('agentId',            4)  ?? 0),
+      initData:           String(get('initData',           5)  ?? ''),
       statusNum,
       statusLabel:        PROJECT_STATUS[statusNum] ?? 'Unknown',
-      auditScore:         Number(get('auditScore',         8)  ?? 0),
-      reliabilityScore:   Number(get('reliabilityScore',   9)  ?? 0),
-      qualityScore:       Number(get('qualityScore',       10) ?? 0),
-      marketFitScore:     Number(get('marketFitScore',     11) ?? 0),
-      submittedAt:        BigInt(get('submittedAt',        12) ?? 0),
-      auditedAt:          BigInt(get('auditedAt',          13) ?? 0),
-      investedAt:         BigInt(get('investedAt',         14) ?? 0),
-      executionUnlocksAt: BigInt(get('executionUnlocksAt', 15) ?? 0),
-      exitedAt:           BigInt(get('exitedAt',           16) ?? 0),
-      requestedAmount:    BigInt(get('requestedAmount',    17) ?? 0),
-      auditContentHash:   String(get('auditContentHash',   18) ?? ''),
-      investmentAmount:   BigInt(get('investmentAmount',   19) ?? 0),
-      releasedAmount:     BigInt(get('releasedAmount',     20) ?? 0),
-      exitProceeds:       BigInt(get('exitProceeds',       21) ?? 0),
+      auditScore:         Number(get('auditScore',         7)  ?? 0),
+      reliabilityScore:   Number(get('reliabilityScore',   8)  ?? 0),
+      qualityScore:       Number(get('qualityScore',       9)  ?? 0),
+      marketFitScore:     Number(get('marketFitScore',     10) ?? 0),
+      submittedAt:        BigInt(get('submittedAt',        11) ?? 0),
+      auditedAt:          BigInt(get('auditedAt',          12) ?? 0),
+      executionUnlocksAt: BigInt(get('executionUnlocksAt', 13) ?? 0),
+      settledAt:          BigInt(get('settledAt',          14) ?? 0),
+      auditContentHash:   String(get('auditContentHash',   15) ?? ''),
+      returnedAmount:     BigInt(get('returnedAmount',     16) ?? 0),
     };
   });
 

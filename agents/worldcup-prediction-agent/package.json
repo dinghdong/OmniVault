@@ -1,0 +1,23 @@
+{
+  "name": "worldcup-prediction-agent",
+  "version": "0.1.0",
+  "description": "Simple test prediction agent for OmniVault World Cup betting demo",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "autonomous": "tsx src/autonomous.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}

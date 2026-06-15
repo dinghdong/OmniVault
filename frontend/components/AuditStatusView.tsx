@@ -6,6 +6,7 @@ import { useAuditStatus } from '../hooks/useAuditStatus';
 import {
   explorerUrl,
   investmentManagerAddress, investmentManagerAbi,
+  omniOracleAddress, omniOracleAbi,
   fundVaultAddress, fundVaultAbi,
   contractChainId,
 } from '../hooks/contracts';
@@ -13,16 +14,14 @@ import {
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 const STATUS_META: Record<string, { color: string; icon: string; pulse?: boolean }> = {
-  Pending:          { color: '#facc15', icon: '⏳', pulse: true },
+  None:             { color: 'rgba(255,255,255,0.3)', icon: '?' },
   Auditing:         { color: '#63b3ed', icon: '🤖', pulse: true },
   PendingExecution: { color: '#a78bfa', icon: '🔒' },
   Rejected:         { color: '#f87171', icon: '✕' },
   Active:           { color: '#00ff88', icon: '✓' },
-  CircuitBroken:    { color: '#f87171', icon: '⚠' },
-  Exited:           { color: 'rgba(255,255,255,0.4)', icon: '→' },
-  WriteOff:         { color: '#f87171', icon: '✕' },
+  Settled:          { color: '#8b949e', icon: '→' },
   Vetoed:           { color: '#f87171', icon: '✕' },
-  None:             { color: 'rgba(255,255,255,0.3)', icon: '?' },
+  CircuitBroken:    { color: '#f87171', icon: '⚠' },
 };
 
 function useCountdown(endTimestamp: bigint | undefined) {
@@ -110,30 +109,21 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
   const { writeContract: writeAdmin, data: adminTxHash, isPending: adminPending } = useWriteContract();
   const { isLoading: adminConfirming, isSuccess: adminSuccess } = useWaitForTransactionReceipt({ hash: adminTxHash });
 
-  const [exitReturnPct, setExitReturnPct] = useState(150);
-  const [adminAction, setAdminAction] = useState<string | null>(null);
+  const { writeContract: writeSetResult, data: setResultTxHash, isPending: settingResult } = useWriteContract();
+  const { isLoading: setResultConfirming, isSuccess: setResultSuccess } = useWaitForTransactionReceipt({ hash: setResultTxHash });
 
-  // Vesting progress — only fetch when Active
-  const { data: vestingRaw } = useReadContract({
-    address:      investmentManagerAddress,
-    abi:          investmentManagerAbi,
-    functionName: 'vestingProgress' as any,
-    args:         [BigInt(projectId)] as any,
-    chainId:      contractChainId,
-    query:        { enabled: status.statusNum === 5, refetchInterval: 10_000 },
-  } as any);
-  const vestingData  = vestingRaw as [bigint, bigint, bigint, bigint] | undefined;
-  const vestedBps    = vestingData ? Number(vestingData[0]) : 0;
-  const claimableWei = vestingData ? vestingData[1] : BigInt(0);
-  const releasedWei  = vestingData ? vestingData[2] : BigInt(0);
-  const vestTotal    = vestingData ? vestingData[3] : BigInt(0);
+  const [adminAction, setAdminAction] = useState<string | null>(null);
+  const [simScore, setSimScore]     = useState(75);
+  const [simRel, setSimRel]         = useState(80);
+  const [simQual, setSimQual]       = useState(80);
+  const [simMkt, setSimMkt]         = useState(70);
 
   function handleExecute() {
     writeExecute({
       address:      investmentManagerAddress,
       abi:          investmentManagerAbi,
-      functionName: 'executeInvestment' as any,
-      args:         [BigInt(projectId), status.requestedAmount, '0x' as `0x${string}`],
+      functionName: 'executeProject' as any,
+      args:         [BigInt(projectId)],
     } as any);
   }
 
@@ -146,23 +136,28 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
     } as any);
   }
 
-  function handleClaim() {
-    setAdminAction('claim');
-    writeAdmin({
-      address:      investmentManagerAddress,
-      abi:          investmentManagerAbi,
-      functionName: 'claimPayout' as any,
-      args:         [BigInt(projectId)],
-    } as any);
-  }
+  // Auto-finalize after setting a mock result so the demo flow stays one-click.
+  useEffect(() => {
+    if (setResultSuccess) {
+      handleSettle();
+    }
+  }, [setResultSuccess]);
 
-  function handleSimulateExit() {
-    setAdminAction('exit');
-    writeAdmin({
-      address:      investmentManagerAddress,
-      abi:          investmentManagerAbi,
-      functionName: 'simulateExit' as any,
-      args:         [BigInt(projectId), BigInt(Math.round(exitReturnPct * 100))],
+  function handleSetMockResult(passing: boolean) {
+    const finalScore = passing ? simScore : 30;
+    writeSetResult({
+      address:      omniOracleAddress,
+      abi:          omniOracleAbi,
+      functionName: 'setResult' as any,
+      args:         [
+        BigInt(projectId),
+        BigInt(finalScore + 1),
+        passing ? simRel : 0,
+        passing ? simQual : 0,
+        passing ? simMkt : 0,
+        `0x${'0'.repeat(64)}`,
+      ],
+      chainId:      contractChainId,
     } as any);
   }
 
@@ -176,23 +171,13 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
     } as any);
   }
 
-  function handleWriteOff() {
-    setAdminAction('writeoff');
-    writeAdmin({
-      address:      investmentManagerAddress,
-      abi:          investmentManagerAbi,
-      functionName: 'markWriteOff' as any,
-      args:         [BigInt(projectId)],
-    } as any);
-  }
-
   const executionUnlocksMs = Number(status.executionUnlocksAt ?? 0) * 1000;
-  const timelockActive     = status.statusNum === 3 && executionUnlocksMs > 0 && Date.now() < executionUnlocksMs;
-  const timelockExpired    = status.statusNum === 3 && executionUnlocksMs > 0 && Date.now() >= executionUnlocksMs;
+  const timelockActive     = status.statusNum === 2 && executionUnlocksMs > 0 && Date.now() < executionUnlocksMs;
+  const timelockExpired    = status.statusNum === 2 && executionUnlocksMs > 0 && Date.now() >= executionUnlocksMs;
 
   const reqEth      = status.requestedAmount  > BigInt(0) ? formatEther(status.requestedAmount)  : null;
-  const investedEth = status.investmentAmount > BigInt(0) ? formatEther(status.investmentAmount) : null;
-  const releasedEth = status.releasedAmount   > BigInt(0) ? formatEther(status.releasedAmount)   : null;
+  const fundedEth   = status.fundedAmount     > BigInt(0) ? formatEther(status.fundedAmount)     : null;
+  const returnedEth = status.returnedAmount   > BigInt(0) ? formatEther(status.returnedAmount)   : null;
 
   const auditScore      = status.auditScore;
   const reliabilityScore = status.reliabilityScore;
@@ -272,7 +257,7 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
                 <div className="asv-score-label">AI Audit Score</div>
                 <div className="asv-score-rec">
                   {auditScore >= 60
-                    ? <span style={{ color: '#00ff88' }}>✓ Above threshold — queued for investment</span>
+                    ? <span style={{ color: '#00ff88' }}>✓ Above threshold — queued for execution</span>
                     : <span style={{ color: '#f87171' }}>✕ Below threshold — application rejected</span>
                   }
                 </div>
@@ -349,7 +334,7 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
               </div>
             ) : null}
           </>
-        ) : status.statusNum === 2 ? (
+        ) : status.statusNum === 1 ? (
           <div className="asv-loading-row">
             <div className="asv-spinner-sm" />
             <span>Waiting for Chainlink Functions request…</span>
@@ -363,6 +348,55 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
           </div>
         )}
       </div>
+
+      {/* ── Dev / Simulate Audit for mock oracle ── */}
+      {status.statusNum === 1 && !setResultSuccess && (
+        <div className="detail-card detail-card--accent-purple">
+          <div className="detail-section-label">
+            <span>⚙ DEV / SIMULATE AUDIT</span>
+            <span className="detail-section-line" />
+          </div>
+          <div className="asv-ai-hint" style={{ marginBottom: 12 }}>
+            The current oracle is a mock. For demo/testing, manually set an audit result to continue the flow.
+          </div>
+          <div className="asv-funding-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 12 }}>
+            <div className="asv-funding-cell">
+              <span className="asv-funding-label">Final Score</span>
+              <input className="input-field" type="number" min={0} max={100} value={simScore} onChange={e => setSimScore(Math.min(100, Math.max(0, Number(e.target.value))))} style={{ maxWidth: 80 }} />
+            </div>
+            <div className="asv-funding-cell">
+              <span className="asv-funding-label">Reliability</span>
+              <input className="input-field" type="number" min={0} max={100} value={simRel} onChange={e => setSimRel(Math.min(100, Math.max(0, Number(e.target.value))))} style={{ maxWidth: 80 }} />
+            </div>
+            <div className="asv-funding-cell">
+              <span className="asv-funding-label">Quality</span>
+              <input className="input-field" type="number" min={0} max={100} value={simQual} onChange={e => setSimQual(Math.min(100, Math.max(0, Number(e.target.value))))} style={{ maxWidth: 80 }} />
+            </div>
+            <div className="asv-funding-cell">
+              <span className="asv-funding-label">Market Fit</span>
+              <input className="input-field" type="number" min={0} max={100} value={simMkt} onChange={e => setSimMkt(Math.min(100, Math.max(0, Number(e.target.value))))} style={{ maxWidth: 80 }} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn-primary btn-sm"
+              disabled={settingResult || setResultConfirming}
+              onClick={() => handleSetMockResult(true)}
+            >
+              {settingResult || setResultConfirming ? 'Setting…' : '✓ Simulate Passing Audit'}
+            </button>
+            <button
+              type="button"
+              className="btn-danger btn-sm"
+              disabled={settingResult || setResultConfirming}
+              onClick={() => handleSetMockResult(false)}
+            >
+              ✕ Simulate Rejecting Audit
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Settle Audit (two-transaction pattern) ── */}
       {status.needsSettlement && !settleSuccess && (
@@ -389,7 +423,7 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
         </div>
       )}
 
-      {/* ── Execute Investment (timelock expired, PendingExecution) ── */}
+      {/* ── Execute Project (timelock expired, PendingExecution) ── */}
       {timelockExpired && !executeSuccess && (
         <div className="detail-card detail-card-padded detail-card--accent-green">
           <div className="detail-section-label">
@@ -397,14 +431,14 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
           </div>
           <div className="asv-ai-hint" style={{ marginBottom: 12 }}>
             LP veto window has closed. Execute to release{' '}
-            {reqEth ? <strong>{reqEth} ETH</strong> : 'funds'} to the project (20% upfront, 80% vested over 52 weeks).
+            {reqEth ? <strong>{reqEth} ETH</strong> : 'funds'} to the project.
           </div>
           <button
             className="btn-primary"
             onClick={handleExecute}
             disabled={executing || executeConfirming}
           >
-            {executing ? 'Confirm in wallet…' : executeConfirming ? 'Executing…' : '⚡ Execute Investment'}
+            {executing ? 'Confirm in wallet…' : executeConfirming ? 'Executing…' : '⚡ Execute Project'}
           </button>
           {executeTxHash && (
             <a className="asv-tx-link" href={`${explorerUrl}/tx/${executeTxHash}`} target="_blank" rel="noopener noreferrer" style={{ marginTop: 8 }}>
@@ -415,7 +449,7 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
       )}
       {executeSuccess && (
         <div className="asv-final asv-final--success">
-          Investment executed ✓ — project is now Active. Vesting clock started.
+          Project executed ✓ — funds released.
         </div>
       )}
 
@@ -438,7 +472,7 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
       )}
 
       {/* ── Funding info ── */}
-      {(reqEth || investedEth) && (
+      {(reqEth || fundedEth) && (
         <div className="detail-card detail-card-padded">
           <div className="detail-section-label">Funding</div>
           <div className="asv-funding-grid">
@@ -448,22 +482,16 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
                 <span className="asv-funding-val">{reqEth} ETH</span>
               </div>
             )}
-            {investedEth && (
+            {fundedEth && (
               <div className="asv-funding-cell">
-                <span className="asv-funding-label">Invested</span>
-                <span className="asv-funding-val" style={{ color: '#00ff88' }}>{investedEth} ETH</span>
+                <span className="asv-funding-label">Funded</span>
+                <span className="asv-funding-val" style={{ color: '#00ff88' }}>{fundedEth} ETH</span>
               </div>
             )}
-            {releasedEth && (
+            {returnedEth && (
               <div className="asv-funding-cell">
-                <span className="asv-funding-label">Released</span>
-                <span className="asv-funding-val">{releasedEth} ETH</span>
-              </div>
-            )}
-            {investedEth && (
-              <div className="asv-funding-cell">
-                <span className="asv-funding-label">Vesting</span>
-                <span className="asv-funding-val">20% up · 80% / 52w</span>
+                <span className="asv-funding-label">Returned</span>
+                <span className="asv-funding-val">{returnedEth} ETH</span>
               </div>
             )}
           </div>
@@ -480,12 +508,12 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
             <>
               <div className="asv-countdown" style={{ color: '#a78bfa' }}>{timelockCountdown}</div>
               <div className="asv-cw-hint">
-                Timelock active — <code>executeInvestment()</code> unlocks when it expires.
+                Timelock active — <code>executeProject()</code> unlocks when it expires.
               </div>
             </>
           ) : (
             <div className="asv-cw-hint" style={{ color: '#00ff88' }}>
-              ✓ Timelock expired — awaiting <code>executeInvestment()</code>…
+              ✓ Timelock expired — awaiting <code>executeProject()</code>…
             </div>
           )}
         </div>
@@ -498,7 +526,7 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
           {isLP ? (
             <>
               <div className="asv-ai-hint" style={{ marginBottom: 12 }}>
-                You hold LP shares. You can block this investment before the timelock expires.
+                You hold LP shares. You can block this execution before the timelock expires.
                 Any LP may call veto — one veto is sufficient.
               </div>
               <button
@@ -506,7 +534,7 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
                 onClick={handleVeto}
                 disabled={vetoing || vetoConfirming}
               >
-                {vetoing ? 'Confirm in wallet…' : vetoConfirming ? 'Submitting…' : '🗳 Veto Investment'}
+                {vetoing ? 'Confirm in wallet…' : vetoConfirming ? 'Submitting…' : '🗳 Veto Execution'}
               </button>
               {vetoTxHash && (
                 <a className="asv-tx-link" href={`${explorerUrl}/tx/${vetoTxHash}`} target="_blank" rel="noopener noreferrer" style={{ marginTop: 8 }}>
@@ -525,14 +553,19 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
       )}
       {vetoSuccess && (
         <div className="asv-final asv-final--error">
-          Investment vetoed ✓ — no funds will be transferred.
+          Execution vetoed ✓ — no funds will be transferred.
         </div>
       )}
 
       {/* ── Final status messages ── */}
       {status.statusLabel === 'Active' && (
         <div className="asv-final asv-final--success">
-          Investment executed — project is now active in the portfolio.
+          Project executed — funds have been released.
+        </div>
+      )}
+      {status.statusLabel === 'Settled' && (
+        <div className="asv-final asv-final--success">
+          Project settled — returns recorded on-chain.
         </div>
       )}
       {status.statusLabel === 'Rejected' && status.auditFailed && (
@@ -552,145 +585,58 @@ export default function AuditStatusView({ projectId, txHash, chainId, onDone }: 
       )}
       {status.statusLabel === 'Vetoed' && (
         <div className="asv-final asv-final--error">
-          Investment vetoed during timelock window. No funds were transferred.
+          Execution vetoed during timelock window. No funds were transferred.
         </div>
       )}
 
-      {/* ── Active: Vesting & Claim ── */}
-      {status.statusNum === 5 && vestingData && (
-        <div className="detail-card detail-card-padded detail-card--accent-green">
-          <div className="detail-section-label">⚡ Vesting Schedule</div>
-          <div className="asv-round-scores" style={{ marginBottom: 12 }}>
-            <div className="asv-round-item">
-              <span className="asv-round-label">Vested</span>
-              <div className="asv-round-bar">
-                <div className="asv-round-bar-fill" style={{ width: `${vestedBps / 100}%`, background: '#00ff88' }} />
-              </div>
-              <span className="asv-round-score">{(vestedBps / 100).toFixed(1)}%</span>
-            </div>
-          </div>
-          <div className="asv-funding-grid">
-            {vestTotal > BigInt(0) && (
-              <div className="asv-funding-cell">
-                <span className="asv-funding-label">Total Invested</span>
-                <span className="asv-funding-val">{formatEther(vestTotal)} ETH</span>
-              </div>
-            )}
-            <div className="asv-funding-cell">
-              <span className="asv-funding-label">Released</span>
-              <span className="asv-funding-val">{releasedWei > BigInt(0) ? formatEther(releasedWei) : '0'} ETH</span>
-            </div>
-            <div className="asv-funding-cell">
-              <span className="asv-funding-label">Claimable Now</span>
-              <span className="asv-funding-val" style={{ color: claimableWei > BigInt(0) ? '#00ff88' : undefined }}>
-                {claimableWei > BigInt(0) ? formatEther(claimableWei) : '0'} ETH
-              </span>
-            </div>
-          </div>
-          {claimableWei > BigInt(0) && !(adminSuccess && adminAction === 'claim') && (
-            <button
-              className="btn-primary"
-              onClick={handleClaim}
-              disabled={adminPending || adminConfirming}
-              style={{ marginTop: 12 }}
-            >
-              {adminPending && adminAction === 'claim' ? 'Confirm in wallet…'
-                : adminConfirming && adminAction === 'claim' ? 'Claiming…'
-                : '⚡ Claim Payout'}
-            </button>
-          )}
-          {adminSuccess && adminAction === 'claim' && (
-            <div className="asv-final asv-final--success" style={{ marginTop: 8 }}>Payout claimed ✓</div>
-          )}
-          {adminTxHash && adminAction === 'claim' && (
-            <a className="asv-tx-link" href={`${explorerUrl}/tx/${adminTxHash}`} target="_blank" rel="noopener noreferrer" style={{ marginTop: 8 }}>View tx ↗</a>
-          )}
-        </div>
-      )}
-
-      {/* ── Admin: simulateExit / circuitBreak / writeOff ── */}
-      {(status.statusNum === 5 || status.statusNum === 6) && (
+      {/* ── Admin: circuitBreak ── */}
+      {(status.statusNum === 4 || status.statusNum === 5) && (
         <div className="detail-card detail-card-padded detail-card--accent-orange">
           <div className="detail-section-label">⚙ Admin Controls</div>
           <div className="asv-ai-hint" style={{ marginBottom: 10 }}>
-            Requires RISK_AGENT_ROLE / DEFAULT_ADMIN_ROLE — will revert if not authorized.
+            Requires DEFAULT_ADMIN_ROLE — will revert if not authorized.
           </div>
 
-          {status.statusNum === 5 && (
-            <>
-              <div className="input-group" style={{ marginBottom: 8 }}>
-                <label className="input-label">Return %</label>
-                <input
-                  type="number"
-                  className="input-field"
-                  value={exitReturnPct}
-                  onChange={e => setExitReturnPct(Number(e.target.value))}
-                  min={0}
-                  max={10000}
-                />
-                <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>
-                  100=1x · {exitReturnPct}% = {exitReturnPct >= 100 ? '+' : ''}{(exitReturnPct - 100).toFixed(0)}% ROI
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button
-                  className="btn-primary btn-sm"
-                  onClick={handleSimulateExit}
-                  disabled={adminPending || adminConfirming}
-                >
-                  {adminPending && adminAction === 'exit' ? 'Confirm…' : '→ Simulate Exit'}
-                </button>
-                <button
-                  className="btn-danger btn-sm"
-                  onClick={handleCircuitBreak}
-                  disabled={adminPending || adminConfirming}
-                >
-                  {adminPending && adminAction === 'break' ? 'Confirm…' : '⚠ Circuit Break'}
-                </button>
-              </div>
-            </>
-          )}
-
-          {status.statusNum === 6 && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
               className="btn-danger btn-sm"
-              onClick={handleWriteOff}
+              onClick={handleCircuitBreak}
               disabled={adminPending || adminConfirming}
             >
-              {adminPending && adminAction === 'writeoff' ? 'Confirm…' : '✕ Mark Write-Off'}
+              {adminPending && adminAction === 'break' ? 'Confirm…' : '⚠ Circuit Break'}
             </button>
-          )}
+          </div>
 
-          {adminTxHash && adminAction !== 'claim' && (
+          {adminTxHash && adminAction === 'break' && (
             <a className="asv-tx-link" href={`${explorerUrl}/tx/${adminTxHash}`} target="_blank" rel="noopener noreferrer" style={{ marginTop: 8 }}>View tx ↗</a>
           )}
-          {adminSuccess && adminAction !== 'claim' && (
+          {adminSuccess && adminAction === 'break' && (
             <div className="asv-final asv-final--success" style={{ marginTop: 8 }}>Transaction confirmed ✓</div>
           )}
         </div>
       )}
 
-      {/* ── Exited: P&L summary ── */}
-      {status.statusNum === 7 && status.exitProceeds > BigInt(0) && (
+      {/* ── Settled: P&L summary ── */}
+      {status.statusLabel === 'Settled' && status.returnedAmount > BigInt(0) && (
         <div className="detail-card detail-card-padded">
-          <div className="detail-section-label">→ Exit Summary</div>
+          <div className="detail-section-label">→ Settlement Summary</div>
           <div className="asv-funding-grid">
             <div className="asv-funding-cell">
-              <span className="asv-funding-label">Invested</span>
-              <span className="asv-funding-val">{formatEther(status.investmentAmount)} ETH</span>
+              <span className="asv-funding-label">Funded</span>
+              <span className="asv-funding-val">{formatEther(status.fundedAmount)} ETH</span>
             </div>
             <div className="asv-funding-cell">
               <span className="asv-funding-label">Returns</span>
-              <span className="asv-funding-val" style={{ color: status.exitProceeds >= status.investmentAmount ? '#00ff88' : '#f87171' }}>
-                {formatEther(status.exitProceeds)} ETH
+              <span className="asv-funding-val" style={{ color: status.returnedAmount >= status.fundedAmount ? '#00ff88' : '#f87171' }}>
+                {formatEther(status.returnedAmount)} ETH
               </span>
             </div>
-            {status.investmentAmount > BigInt(0) && (
+            {status.fundedAmount > BigInt(0) && (
               <div className="asv-funding-cell">
                 <span className="asv-funding-label">ROI</span>
-                <span className="asv-funding-val" style={{ color: status.exitProceeds >= status.investmentAmount ? '#00ff88' : '#f87171' }}>
-                  {status.exitProceeds >= status.investmentAmount ? '+' : ''}
-                  {(Number(status.exitProceeds) / Number(status.investmentAmount) * 100 - 100).toFixed(2)}%
+                <span className="asv-funding-val" style={{ color: status.returnedAmount >= status.fundedAmount ? '#00ff88' : '#f87171' }}>
+                  {status.returnedAmount >= status.fundedAmount ? '+' : ''}
+                  {(Number(status.returnedAmount) / Number(status.fundedAmount) * 100 - 100).toFixed(2)}%
                 </span>
               </div>
             )}
