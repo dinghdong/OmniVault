@@ -1,6 +1,7 @@
 import Head from 'next/head';
 import '../styles/globals.css';
 import '../styles/main.css';
+import '../styles/neon-theme.css';
 import '../styles/agent-sim.css';
 import Providers from '../components/Providers';
 
@@ -11,7 +12,9 @@ export default function App({ Component, pageProps }) {
         <title>OmniVault — AI-Powered Decentralized VC</title>
       </Head>
       <Providers>
-        <Component {...pageProps} />
+        <div className="neon-theme">
+          <Component {...pageProps} />
+        </div>
       </Providers>
     </>
   );
