@@ -359,12 +359,33 @@
   max-width: 1200px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "balance actions"
+    "dashboard dashboard";
   gap: 20px;
   align-items: start;
 }
-@media (max-width: 900px) {
-  .neon-theme .portfolio-connected { grid-template-columns: 1fr; }
+.neon-theme .portfolio-connected > .portfolio-card {
+  grid-area: balance;
+}
+.neon-theme .portfolio-connected > .card-actions {
+  grid-area: actions;
+}
+.neon-theme .portfolio-connected > .lp-dashboard {
+  grid-area: dashboard;
+}
+@media (max-width: 720px) {
+  .neon-theme .portfolio-connected {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "balance"
+      "actions"
+      "dashboard";
+  }
+  .neon-theme .portfolio-connected > .card-actions {
+    flex-direction: row;
+  }
 }
 .neon-theme .portfolio-card {
   background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
