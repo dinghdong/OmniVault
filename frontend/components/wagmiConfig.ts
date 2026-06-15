@@ -21,9 +21,10 @@ const config = createConfig(
     walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '1edac01334b54f7548451183a21de5a8',
     chains: orderedChains as any,
     transports: {
-      // Multiple RPCs with automatic failover — the official endpoint first
-      // (publicnode has been rate-limiting), then any env override as backup.
+      // Multiple RPCs with automatic failover. publicnode is usually the most
+      // accessible globally; official + tenderly are fallbacks.
       [arbitrumSepolia.id]: fallback([
+        http('https://arbitrum-sepolia-rpc.publicnode.com'),
         http('https://sepolia-rollup.arbitrum.io/rpc'),
         http('https://arbitrum-sepolia.gateway.tenderly.co'),
         ...(process.env.NEXT_PUBLIC_ARB_SEPOLIA_RPC_URL
