@@ -238,9 +238,11 @@ export default function AgentSimPage() {
   }, [encodedBetRequest]);
 
   // ── Submit ─────────────────────────────────────────────────────────────────
+  const effectiveInitData = (initData && initData !== '0x') ? initData : encodedBetRequest;
+
   const canExecute = !!selected && !!contractAddr && /^0x[0-9a-fA-F]{40}$/.test(contractAddr)
     && !!amount && parseFloat(amount) > 0
-    && !!initData && initData !== '0x'
+    && !!effectiveInitData && effectiveInitData !== '0x'
     && !state.isPending && !state.isConfirming;
 
   const handleExecute = async () => {
@@ -249,7 +251,8 @@ export default function AgentSimPage() {
     if (!selected)    { setLocalError('Select an NFA agent.'); return; }
     if (!/^0x[0-9a-fA-F]{40}$/.test(contractAddr)) { setLocalError('Enter a valid target contract address.'); return; }
     if (!amount || parseFloat(amount) <= 0) { setLocalError('Enter funding amount.'); return; }
-    if (!initData || initData === '0x') { setLocalError('Provide initData (hex bytes) or build a BetRequest.'); return; }
+    const data = effectiveInitData;
+    if (!data || data === '0x') { setLocalError('Provide initData (hex bytes) or build a BetRequest.'); return; }
 
     try {
       const { parseEther } = await import('viem');
@@ -257,7 +260,7 @@ export default function AgentSimPage() {
         contractAddr as `0x${string}`,
         parseEther(amount as `${number}`),
         selected.id,
-        initData,
+        data,
       );
     } catch (e: any) { setLocalError(e?.message ?? 'Execute failed'); }
   };
@@ -625,7 +628,7 @@ export default function AgentSimPage() {
                 <button
                   type="button"
                   className="btn-primary btn-full"
-                  disabled={!canExecute}
+                  disabled={state.isPending || state.isConfirming}
                   onClick={handleExecute}
                 >
                   {state.isPending || state.isConfirming ? (
