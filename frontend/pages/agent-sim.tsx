@@ -8,10 +8,22 @@ import {
   nfaAddress, nfaAbi,
   fundVaultAddress, fundVaultAbi,
   investmentManagerAddress, investmentManagerAbi,
+  mockPolyMarketAddress, mockPolyMarketAbi,
   contractChainId,
   worldCupAgentVaultAddress,
 } from '../hooks/contracts';
 import { useProjectSubmit } from '../hooks/useProjectSubmit';
+
+/* ─── Helpers ──────────────────────────────────────────────────────────────── */
+function oddsString(oddsWei: bigint) {
+  return parseFloat(formatEther(oddsWei)).toFixed(2);
+}
+
+function toDateTimeLocal(tsSec: number) {
+  const d = new Date(tsSec * 1000);
+  const offset = d.getTimezoneOffset() * 60_000;
+  return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+}
 
 /* ─── Geometric pixel avatar from token ID ───────────────────────────────── */
 function AgentAvatar({ id, color, size = 34 }: { id: number; color: string; size?: number }) {
@@ -133,6 +145,48 @@ export default function AgentSimPage() {
     query: { refetchInterval: 15_000 },
   });
 
+  const { data: matchCountRaw } = useReadContract({
+    address: mockPolyMarketAddress, abi: mockPolyMarketAbi, functionName: 'matchCount',
+    chainId: contractChainId,
+    query: { refetchInterval: 15_000 },
+  });
+
+  const matchCount = Number((matchCountRaw as bigint | undefined) ?? 0n);
+  const matchContracts = Array.from({ length: matchCount }, (_, i) => ({
+    address: mockPolyMarketAddress,
+    abi: mockPolyMarketAbi,
+    functionName: 'matches' as const,
+    args: [BigInt(i + 1)] as const,
+    chainId: contractChainId,
+  }));
+
+  const { data: matchesRaw } = useReadContracts({
+    contracts: matchContracts,
+    query: { enabled: matchCount > 0 },
+  });
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const matches = (matchesRaw ?? [])
+    .map((r, i) => {
+      if (r.status !== 'success') return null;
+      const m = r.result as [string, string, bigint, bigint, bigint, bigint, bigint, number, number];
+      return {
+        matchId: i + 1,
+        home: m[0],
+        away: m[1],
+        homeOdds: m[2],
+        drawOdds: m[3],
+        awayOdds: m[4],
+        expiration: Number(m[5]),
+        totalPool: m[6],
+        outcome: m[7],
+        status: m[8],
+      };
+    })
+    .filter((m): m is NonNullable<typeof m> =>
+      m !== null && m.status === 0 && m.expiration > nowSec
+    );
+
   const vaultBal = vaultBalRaw ? parseFloat(formatEther(vaultBalRaw as bigint)).toFixed(4) : '—';
 
   // Build agent list
@@ -176,6 +230,12 @@ export default function AgentSimPage() {
       setInitData(encodedBetRequest);
     }
   };
+
+  useEffect(() => {
+    if (encodedBetRequest && encodedBetRequest !== '0x') {
+      setInitData(encodedBetRequest);
+    }
+  }, [encodedBetRequest]);
 
   // ── Submit ─────────────────────────────────────────────────────────────────
   const canExecute = !!selected && !!contractAddr && /^0x[0-9a-fA-F]{40}$/.test(contractAddr)
@@ -398,10 +458,105 @@ export default function AgentSimPage() {
                 </div>
               </section>
 
-              {/* ④ INIT_DATA */}
+              {/* ④ AVAILABLE_MATCHES */}
               <section>
                 <div className="detail-section-label">
                   <span className="detail-section-number">④</span>
+                  <span>AVAILABLE_MATCHES</span>
+                  <span className="detail-section-line" />
+                </div>
+
+                {matches.length === 0 ? (
+                  <div className="info-box" style={{ fontSize: 13 }}>
+                    No open matches found. An admin can create demo matches with{' '}
+                    <code style={{ color: '#00ff88' }}>scripts/create-matches.ts</code>.
+                  </div>
+                ) : (
+                  <div className="asv-funding-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+                    {matches.map(m => {
+                      const selected = matchId === String(m.matchId);
+                      return (
+                        <div
+                          key={m.matchId}
+                          className="asv-funding-cell"
+                          style={{
+                            cursor: 'pointer',
+                            borderColor: selected ? '#00ff88' : undefined,
+                            background: selected ? 'rgba(0,255,136,0.06)' : undefined,
+                          }}
+                          onClick={() => {
+                            setMatchId(String(m.matchId));
+                            setOutcomeIndex('0');
+                            setMinOdds(oddsString(m.homeOdds));
+                            setDeadline(toDateTimeLocal(m.expiration));
+                            setNonce(String(Math.floor(Math.random() * 1e12)));
+                            if (!betAmount) setBetAmount('0.01');
+                          }}
+                        >
+                          <div style={{ fontWeight: 600, marginBottom: 8 }}>
+                            {m.home} <span style={{ opacity: 0.4 }}>vs</span> {m.away}
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, fontSize: 12 }}>
+                            <button
+                              type="button"
+                              className="btn-secondary btn-sm"
+                              style={{ padding: '4px 6px', fontSize: 11 }}
+                              onClick={e => {
+                                e.stopPropagation();
+                                setMatchId(String(m.matchId));
+                                setOutcomeIndex('0');
+                                setMinOdds(oddsString(m.homeOdds));
+                                setDeadline(toDateTimeLocal(m.expiration));
+                                setNonce(String(Math.floor(Math.random() * 1e12)));
+                                if (!betAmount) setBetAmount('0.01');
+                              }}
+                            >
+                              {m.home}<br/>{oddsString(m.homeOdds)}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-secondary btn-sm"
+                              style={{ padding: '4px 6px', fontSize: 11 }}
+                              onClick={e => {
+                                e.stopPropagation();
+                                setMatchId(String(m.matchId));
+                                setOutcomeIndex('1');
+                                setMinOdds(oddsString(m.drawOdds));
+                                setDeadline(toDateTimeLocal(m.expiration));
+                                setNonce(String(Math.floor(Math.random() * 1e12)));
+                                if (!betAmount) setBetAmount('0.01');
+                              }}
+                            >
+                              Draw<br/>{oddsString(m.drawOdds)}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-secondary btn-sm"
+                              style={{ padding: '4px 6px', fontSize: 11 }}
+                              onClick={e => {
+                                e.stopPropagation();
+                                setMatchId(String(m.matchId));
+                                setOutcomeIndex('2');
+                                setMinOdds(oddsString(m.awayOdds));
+                                setDeadline(toDateTimeLocal(m.expiration));
+                                setNonce(String(Math.floor(Math.random() * 1e12)));
+                                if (!betAmount) setBetAmount('0.01');
+                              }}
+                            >
+                              {m.away}<br/>{oddsString(m.awayOdds)}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              {/* ⑤ INIT_DATA */}
+              <section>
+                <div className="detail-section-label">
+                  <span className="detail-section-number">⑤</span>
                   <span>INIT_DATA</span>
                   <span className="detail-section-line" />
                 </div>
