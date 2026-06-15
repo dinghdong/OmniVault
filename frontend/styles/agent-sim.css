@@ -6,18 +6,18 @@
   --as-bg: #050605;
   --as-panel: #0a0c0f;
   --as-panel-2: #101318;
-  --as-accent: #ccff00;
+  --as-accent: #00ff88;
   --as-accent-2: #00f0ff;
   --as-warn: #ffb800;
   --as-danger: #ff2a6d;
   --as-text: #e8ecf1;
   --as-text-dim: #69727d;
   --as-border: rgba(255, 255, 255, 0.09);
-  --as-glow: rgba(204, 255, 0, 0.12);
+  --as-glow: rgba(0, 255, 136, 0.12);
 
   min-height: 100vh;
   background:
-    radial-gradient(circle at 15% 0%, rgba(204, 255, 0, 0.04) 0%, transparent 35%),
+    radial-gradient(circle at 15% 0%, rgba(0, 255, 136, 0.04) 0%, transparent 35%),
     radial-gradient(circle at 85% 100%, rgba(0, 240, 255, 0.04) 0%, transparent 35%),
     var(--as-bg);
   color: var(--as-text);
@@ -96,7 +96,7 @@
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--as-text);
-  text-shadow: 0 0 40px rgba(204, 255, 0, 0.15);
+  text-shadow: 0 0 40px rgba(0, 255, 136, 0.15);
 }
 
 .as-status-pill {
@@ -104,8 +104,8 @@
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
-  background: rgba(204, 255, 0, 0.08);
-  border: 1px solid rgba(204, 255, 0, 0.22);
+  background: rgba(0, 255, 136, 0.08);
+  border: 1px solid rgba(0, 255, 136, 0.22);
   font-family: 'Spline Sans Mono', monospace;
   font-size: 0.78rem;
   color: var(--as-accent);
@@ -183,11 +183,11 @@
   transition: all 0.18s ease;
 }
 .as-agent-pill:hover {
-  border-color: rgba(204, 255, 0, 0.35);
+  border-color: rgba(0, 255, 136, 0.35);
   transform: translateY(-1px);
 }
 .as-agent-pill.selected {
-  background: rgba(204, 255, 0, 0.08);
+  background: rgba(0, 255, 136, 0.08);
   border-color: var(--as-accent);
   box-shadow: 0 0 18px var(--as-glow);
 }
@@ -248,7 +248,7 @@
 }
 .as-input:focus {
   border-color: var(--as-accent);
-  box-shadow: 0 0 0 2px rgba(204, 255, 0, 0.08);
+  box-shadow: 0 0 0 2px rgba(0, 255, 136, 0.08);
 }
 .as-input::placeholder { color: #444b55; }
 
@@ -291,7 +291,7 @@
 }
 .as-match-card.selected {
   border-color: var(--as-accent);
-  background: rgba(204, 255, 0, 0.04);
+  background: rgba(0, 255, 136, 0.04);
   box-shadow: 0 0 24px var(--as-glow);
 }
 .as-match-card::after {
@@ -351,7 +351,7 @@
   color: var(--as-accent-2);
 }
 .as-odds-btn.active {
-  background: rgba(204, 255, 0, 0.1);
+  background: rgba(0, 255, 136, 0.1);
   border-color: var(--as-accent);
   color: var(--as-accent);
   box-shadow: 0 0 14px var(--as-glow);
@@ -413,7 +413,7 @@
 }
 .as-btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 0 28px rgba(204, 255, 0, 0.35);
+  box-shadow: 0 0 28px rgba(0, 255, 136, 0.35);
 }
 .as-btn-primary:disabled {
   opacity: 0.45;

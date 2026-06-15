@@ -32,7 +32,7 @@ function AgentAvatar({ id, color, size = 34 }: { id: number; color: string; size
   );
 }
 
-const AGENT_COLORS = ['#ccff00', '#00f0ff', '#ffb800', '#ff2a6d', '#a78bfa'];
+const AGENT_COLORS = ['#00ff88', '#00f0ff', '#ffb800', '#ff2a6d', '#a78bfa'];
 
 const BET_REQUEST_TYPES = [
   { name: 'matchId', type: 'uint256' },
