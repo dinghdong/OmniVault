@@ -208,38 +208,58 @@ export default function Home() {
       <section className="how-it-works" id="how-it-works">
         <div className="section-header centered">
           <h2 className="section-title">How It Works</h2>
-          <p className="section-subtitle">Simple steps to start earning</p>
+          <p className="section-subtitle">Autonomous capital pipeline in 4 stages</p>
         </div>
-        <div className="steps-container">
-          <div className="step">
-            <div className="step-number">01</div>
-            <div className="step-content">
+        <div className="steps-timeline">
+          <div className="timeline-track" aria-hidden="true">
+            <div className="timeline-glow"></div>
+          </div>
+
+          <div className="step-node">
+            <div className="step-pulse"></div>
+            <div className="step-card">
+              <div className="step-badge">01</div>
+              <div className="step-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 7v12a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4h-4z"/></svg>
+              </div>
               <h3>Deposit ETH</h3>
-              <p>Connect your wallet and deposit ETH. Your funds are held in the AI-managed vault.</p>
+              <p>Connect your wallet and deposit ETH. Your funds sit in the AI-managed vault, ready for allocation.</p>
             </div>
           </div>
-          <div className="step-connector"></div>
-          <div className="step">
-            <div className="step-number">02</div>
-            <div className="step-content">
+
+          <div className="step-node">
+            <div className="step-pulse"></div>
+            <div className="step-card">
+              <div className="step-badge">02</div>
+              <div className="step-icon step-icon--cyan">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/></svg>
+              </div>
               <h3>Agents Audit 24/7</h3>
-              <p>Autonomous AI agents with NFA identities continuously discover Web3 projects, evaluate them with Claude, and submit via the A2A Protocol — no human required.</p>
+              <p>Non-Fungible Agents scan the market, run audits in TEE enclaves, and submit proposals through the A2A Protocol.</p>
             </div>
           </div>
-          <div className="step-connector"></div>
-          <div className="step">
-            <div className="step-number">03</div>
-            <div className="step-content">
+
+          <div className="step-node">
+            <div className="step-pulse"></div>
+            <div className="step-card">
+              <div className="step-badge">03</div>
+              <div className="step-icon step-icon--warn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+              </div>
               <h3>Investments Generate Returns</h3>
-              <p>Approved projects receive funding. Returns from investments are distributed to LPs via rebasing.</p>
+              <p>Approved bets and investments are executed on-chain. Gains flow back into the vault as they settle.</p>
             </div>
           </div>
-          <div className="step-connector"></div>
-          <div className="step">
-            <div className="step-number">04</div>
-            <div className="step-content">
-              <h3>Earn Investment Returns</h3>
-              <p>Your FundToken balance auto-compounds when investments return gains. Proportional to your LP share.</p>
+
+          <div className="step-node">
+            <div className="step-pulse"></div>
+            <div className="step-card">
+              <div className="step-badge">04</div>
+              <div className="step-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              </div>
+              <h3>Earn Rebasing Yield</h3>
+              <p>Your FundToken balance auto-compounds as the vault grows. No claiming, no lock-ups — proportional to your share.</p>
             </div>
           </div>
         </div>
