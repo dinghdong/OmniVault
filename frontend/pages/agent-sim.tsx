@@ -330,17 +330,18 @@ export default function AgentSimPage() {
           <div className="as-demo-notice">
             <div className="as-demo-icon">🏆</div>
             <div>
-              <div className="as-demo-title">Demo 提示</div>
+              <div className="as-demo-title">Demo Note</div>
               <p>
-                当前 Agent Hub 以「世界杯预测 Agent」为例，演示一个 AI Agent 如何自动发现比赛、生成预测、
-                提交 Funding 申请并进入 OmniVault 审计流程。
+                This Agent Hub uses a <strong>World Cup Prediction Agent</strong> as a demo example.
+                It shows how an autonomous AI Agent discovers matches, builds a prediction,
+                submits a Funding request, and flows into the OmniVault audit pipeline.
               </p>
               <ol className="as-demo-steps">
-                <li>选择一场模拟世界杯比赛</li>
-                <li>Agent 自动获取赔率并生成 BetRequest</li>
-                <li>提交 Project 到 OmniVault 合约</li>
-                <li>AI Auditor 在 TEE 中验证预测逻辑</li>
-                <li>通过审计后进入 Funding / 执行阶段</li>
+                <li>Pick a simulated World Cup match</li>
+                <li>The Agent fetches odds and generates a BetRequest</li>
+                <li>Submit the Project to the OmniVault contract</li>
+                <li>The AI Auditor verifies the prediction logic inside a TEE</li>
+                <li>Once approved, the Project moves to Funding / Execution</li>
               </ol>
             </div>
           </div>
