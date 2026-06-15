@@ -165,7 +165,19 @@ export default function AgentSimPage() {
   });
 
   const nowSec = Math.floor(Date.now() / 1000);
-  const matches = (matchesRaw ?? [])
+  type MatchItem = {
+    matchId: number;
+    home: string;
+    away: string;
+    homeOdds: bigint;
+    drawOdds: bigint;
+    awayOdds: bigint;
+    expiration: number;
+    totalPool: bigint;
+    outcome: number;
+    status: number;
+  };
+  const rawMatches: MatchItem[] = (matchesRaw ?? [])
     .map((r, i) => {
       if (r.status !== 'success') return null;
       const m = r.result as [string, string, bigint, bigint, bigint, bigint, bigint, number, number];
@@ -182,9 +194,21 @@ export default function AgentSimPage() {
         status: m[8],
       };
     })
-    .filter((m): m is NonNullable<typeof m> =>
+    .filter((m): m is MatchItem =>
       m !== null && m.status === 0 && m.expiration > nowSec
     );
+
+  // Deduplicate by home/away pair, keep the latest matchId
+  const matches = Array.from(
+    rawMatches.reduce((acc, m) => {
+      const key = `${m.home}-${m.away}`;
+      const existing = acc.get(key);
+      if (!existing || m.matchId > existing.matchId) {
+        acc.set(key, m);
+      }
+      return acc;
+    }, new Map<string, MatchItem>()).values()
+  ).sort((a, b) => b.matchId - a.matchId);
 
   const vaultBal = vaultBalRaw ? parseFloat(formatEther(vaultBalRaw as bigint)).toFixed(4) : '—';
 
